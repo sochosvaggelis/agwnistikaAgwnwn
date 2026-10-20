@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useI18n } from '../i18n'
 import { useCompetitions, useSeasons } from '../hooks'
 import type { Game } from '../db/types'
@@ -32,7 +32,8 @@ export function useSeasonFilter() {
   return { seasons, competitions, seasonId, value, setValue, matches, key, ready: compIds != null }
 }
 
-export function SeasonFilter({ filter }: { filter: ReturnType<typeof useSeasonFilter> }) {
+/** `children` adds more filters to the same row. */
+export function SeasonFilter({ filter, children }: { filter: ReturnType<typeof useSeasonFilter>; children?: ReactNode }) {
   const { t } = useI18n()
   const { seasons, competitions, seasonId, value, setValue } = filter
   const comps = (competitions ?? []).filter(c => seasonId === 'all' || c.seasonId === seasonId)
@@ -59,6 +60,7 @@ export function SeasonFilter({ filter }: { filter: ReturnType<typeof useSeasonFi
           {comps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </label>
+      {children}
     </div>
   )
 }

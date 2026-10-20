@@ -6,9 +6,14 @@ export interface Season {
   createdAt: number
 }
 
+/** A season has at most one competition of each kind; the name can be edited freely */
+export type CompetitionKind = 'league' | 'cup' | 'friendly' | 'other'
+
 export interface Competition {
   id?: number
   seasonId: number
+  /** Missing on competitions created before kinds existed; read it with competitionKind() */
+  kind?: CompetitionKind
   name: string
   createdAt: number
 }

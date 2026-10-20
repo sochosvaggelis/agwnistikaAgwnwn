@@ -1,4 +1,4 @@
-import type { PointerEvent } from 'react'
+import { useId, type PointerEvent, type ReactNode } from 'react'
 import { COURT } from '../stats/rules'
 import type { Shot } from '../stats/compute'
 
@@ -15,10 +15,13 @@ interface Props {
   highlight?: 'FG2' | 'FG3'
   /** Mark the spot of the play being entered */
   marker?: { x: number; y: number }
+  /** Drawn on the floor, under the court lines (meters, like everything else) */
+  layer?: ReactNode
   className?: string
 }
 
-export function Court({ shots = [], onTap, highlight, marker, className }: Props) {
+export function Court({ shots = [], onTap, highlight, marker, layer, className }: Props) {
+  const clipId = useId()
   function handlePointer(e: PointerEvent<SVGSVGElement>) {
     if (!onTap) return
     const svg = e.currentTarget
@@ -36,8 +39,15 @@ export function Court({ shots = [], onTap, highlight, marker, className }: Props
       role={onTap ? 'button' : 'img'}
     >
       <rect x={-0.3} y={-0.3} width={W + 0.6} height={L + 0.6} className="court-floor" />
+      <rect x={BX - COURT.laneHalfWidth} y={0} width={COURT.laneHalfWidth * 2} height={COURT.laneLength} className="court-paint" />
       {highlight === 'FG2' && <path d={twoPointArea} className="court-highlight" />}
       {highlight === 'FG3' && <path d={threePointArea} fillRule="evenodd" className="court-highlight" />}
+      {layer && (
+        <>
+          <clipPath id={clipId}><rect x={0} y={0} width={W} height={L} /></clipPath>
+          <g clipPath={`url(#${clipId})`}>{layer}</g>
+        </>
+      )}
       <g className="court-lines">
         <rect x={0} y={0} width={W} height={L} />
         <rect x={BX - COURT.laneHalfWidth} y={0} width={COURT.laneHalfWidth * 2} height={COURT.laneLength} />

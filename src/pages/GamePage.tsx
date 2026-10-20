@@ -64,7 +64,7 @@ export function GamePage() {
         <button className="btn btn-danger" onClick={remove}>{t('game.delete')}</button>
       </div>
 
-      <div className="card">
+      <div className="card scoreboard">
         <div className="scoreline">
           <div className="side-home"><div className="team">{teamName('home')}</div><div className="pts">{stats.teams.home.score}</div></div>
           <div className="muted">–</div>

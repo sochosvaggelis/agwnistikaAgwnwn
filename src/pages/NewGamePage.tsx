@@ -3,13 +3,16 @@ import { Link, useNavigate } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '../i18n'
 import { db } from '../db/db'
-import type { Player, Side } from '../db/types'
-import { addCompetition, addPlayersQuick, addSeason, addTeam, createGame, playerLabel, sortPlayers } from '../db/repo'
-import { useCompetitions, useMyTeam, useSeasons, useTeams } from '../hooks'
+import { addPlayersQuick, addSeason, addTeam, createGame, ensureCompetition, playerLabel, sortPlayers } from '../db/repo'
+import { availableKinds, COMPETITION_KINDS, DEFAULT_KINDS } from '../db/competitions'
+import type { CompetitionKind, Player, Side } from '../db/types'
+import { useCompetitions, useDefaultCompetitions, useKindName, useMyTeam, useSeasons, useTeams } from '../hooks'
 import { todayISO } from '../format'
 import { DEFAULT_PERIOD_MIN } from '../stats/rules'
 
 const NEW = 'new'
+/** Option value prefix for a kind of competition that is created when the game starts */
+const PRESET = 'kind:'
 
 export function NewGamePage() {
   const { t } = useI18n()
@@ -18,11 +21,12 @@ export function NewGamePage() {
   const teams = useTeams()
   const seasons = useSeasons()
   const competitions = useCompetitions()
+  const defaultComps = useDefaultCompetitions()
+  const kindName = useKindName()
 
   const [seasonSel, setSeasonSel] = useState<string>('')
   const [newSeason, setNewSeason] = useState('')
   const [compSel, setCompSel] = useState<string>('')
-  const [newComp, setNewComp] = useState('')
   const [date, setDate] = useState(todayISO())
   const [venue, setVenue] = useState('')
   const [mySide, setMySide] = useState<Side>('home')
@@ -40,9 +44,22 @@ export function NewGamePage() {
     () => (competitions ?? []).filter(c => seasonId !== NEW && c.seasonId === Number(seasonId)),
     [competitions, seasonId],
   )
-  const compId = compSel && (compSel === NEW || seasonComps.some(c => String(c.id) === compSel))
+  // The season's competitions, then the kinds it can still add (marked ＋). A new season comes with the default kinds.
+  const kindOption = (k: CompetitionKind, adds: boolean) => ({ value: PRESET + k, label: `${adds ? '＋ ' : ''}${kindName(k)}` })
+  const compOptions = seasonId === NEW
+    ? COMPETITION_KINDS.map(k => kindOption(k, !DEFAULT_KINDS.includes(k)))
+    : [
+        ...seasonComps.map(c => ({ value: String(c.id), label: c.name })),
+        ...availableKinds(seasonComps).map(k => kindOption(k, true)),
+      ]
+  const lastGameComp = useLiveQuery(async () => {
+    const ids = new Set(seasonComps.map(c => c.id))
+    return (await db.games.orderBy('date').reverse().filter(g => ids.has(g.competitionId)).first())?.competitionId
+  }, [seasonComps])
+  // Preselect the competition of the season's latest game, else its first one
+  const compId = compSel && compOptions.some(o => o.value === compSel)
     ? compSel
-    : seasonComps.length ? String(seasonComps[seasonComps.length - 1].id) : NEW
+    : lastGameComp != null ? String(lastGameComp) : compOptions[0].value
   const opponents = (teams ?? []).filter(tm => !tm.isMine)
   const oppId = oppSel || (opponents.length ? String(opponents[0].id) : NEW)
 
@@ -73,12 +90,12 @@ export function NewGamePage() {
     setError('')
     if (!myRoster?.size) return setError(t('newGame.needPlayers'))
     if (seasonId === NEW && !newSeason.trim()) return setError(t('newGame.needSeason'))
-    if (compId === NEW && !newComp.trim()) return setError(t('newGame.needSeason'))
     if (oppId === NEW && !newOppName.trim()) return setError(t('newGame.newOpponentName'))
     setBusy(true)
     try {
-      const sId = seasonId === NEW ? await addSeason(newSeason) : Number(seasonId)
-      const cId = compId === NEW ? await addCompetition(sId, newComp) : Number(compId)
+      const sId = seasonId === NEW ? await addSeason(newSeason, defaultComps) : Number(seasonId)
+      const kind = compId.startsWith(PRESET) ? compId.slice(PRESET.length) as CompetitionKind : null
+      const cId = kind ? await ensureCompetition(sId, { kind, name: kindName(kind) }) : Number(compId)
       let opponentId: number
       let oppIds: number[]
       if (oppId === NEW) {
@@ -101,7 +118,7 @@ export function NewGamePage() {
       })
       navigate(`/games/${gameId}/live`, { replace: true })
     } catch (e) {
-      setError(String(e))
+      setError(e instanceof Error && e.message === 'duplicate-name' ? t('seasons.duplicateName') : String(e))
       setBusy(false)
     }
   }
@@ -125,13 +142,9 @@ export function NewGamePage() {
           <label>
             {t('common.competition')}
             <select value={compId} onChange={e => setCompSel(e.target.value)}>
-              {seasonComps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              <option value={NEW}>＋ {t('seasons.newCompetition')}</option>
+              {compOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
-          {compId === NEW && (
-            <label>{t('seasons.newCompetition')}<input value={newComp} onChange={e => setNewComp(e.target.value)} placeholder={t('seasons.competitionPlaceholder')} /></label>
-          )}
           <label>{t('common.date')}<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
           <label className="grow">{t('common.venue')}<input value={venue} onChange={e => setVenue(e.target.value)} /></label>
         </div>

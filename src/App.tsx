@@ -46,7 +46,7 @@ function Layout() {
   return (
     <>
       <nav className="app-nav">
-        <span className="brand">🏀 {t('app.title')}</span>
+        <span className="brand"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />{t('app.title')}</span>
         <NavLink to="/" end>{t('nav.games')}</NavLink>
         <NavLink to="/stats">{t('nav.stats')}</NavLink>
         <NavLink to="/h2h">{t('nav.h2h')}</NavLink>

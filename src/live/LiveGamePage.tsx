@@ -219,7 +219,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     <div className="live">
       <header className="live-top">
         <button className="btn btn-ghost" onClick={exitGame}>‹ {t('live.exit')}</button>
-        <TeamScore side="home" name={teamName('home')} stats={stats} period={game.period} />
+        <TeamScore side="home" stats={stats} period={game.period} />
         <div className="live-mid">
           <div className="live-period">
             <button className="btn btn-ghost btn-sm" onClick={() => changePeriod(-1)} disabled={game.period <= 1} aria-label={t('live.prevPeriod')}>◀</button>
@@ -239,12 +239,12 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
             </div>
           )}
         </div>
-        <TeamScore side="away" name={teamName('away')} stats={stats} period={game.period} />
+        <TeamScore side="away" stats={stats} period={game.period} />
       </header>
 
       <div className="live-body">
         <RosterColumn
-          side="home" players={roster.home} stats={stats} step={step}
+          side="home" name={teamName('home')} players={roster.home} stats={stats} step={step}
           onPlayer={p => dispatch({ t: 'player', side: 'home', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'home' })}
           onAdd={() => setModal({ addTo: 'home' })}
@@ -260,7 +260,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
           <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         </div>
         <RosterColumn
-          side="away" players={roster.away} stats={stats} step={step}
+          side="away" name={teamName('away')} players={roster.away} stats={stats} step={step}
           onPlayer={p => dispatch({ t: 'player', side: 'away', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'away' })}
           onAdd={() => setModal({ addTo: 'away' })}
@@ -330,14 +330,13 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   )
 }
 
-function TeamScore({ side, name, stats, period }: { side: Side; name: string; stats: GameStats; period: number }) {
+function TeamScore({ side, stats, period }: { side: Side; stats: GameStats; period: number }) {
   const { t } = useI18n()
   const team = stats.teams[side]
   const fouls = teamFoulsInPeriod(team, period)
   const penalty = fouls >= TEAM_FOUL_PENALTY
   return (
     <div className={`team-score side-${side}`}>
-      <span className="team-name">{name}</span>
       <span className="score">{team.score}</span>
       <span className={`team-fouls${penalty ? ' penalty' : ''}`} title={t('live.teamFouls')}>
         {t('stat.PF')} {fouls}{penalty ? ` · ${t('live.penalty')}` : ''}
@@ -348,6 +347,7 @@ function TeamScore({ side, name, stats, period }: { side: Side; name: string; st
 
 interface RosterProps {
   side: Side
+  name: string
   players: Player[]
   stats: GameStats
   step: Step
@@ -356,7 +356,7 @@ interface RosterProps {
   onAdd: () => void
 }
 
-function RosterColumn({ side, players, stats, step, onPlayer, onCoach, onAdd }: RosterProps) {
+function RosterColumn({ side, name, players, stats, step, onPlayer, onCoach, onAdd }: RosterProps) {
   const { t } = useI18n()
   const picking = step.kind === 'pick' || step.kind === 'player'
   const selected = step.kind === 'action' || step.kind === 'foulType' ? step.actor : undefined
@@ -364,6 +364,7 @@ function RosterColumn({ side, players, stats, step, onPlayer, onCoach, onAdd }: 
 
   return (
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
+      <div className="roster-name">{name}</div>
       <div className="roster-grid">
         {players.map(p => {
           const line = stats.players.get(p.id!)

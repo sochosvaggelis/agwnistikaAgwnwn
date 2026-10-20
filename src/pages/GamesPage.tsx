@@ -47,7 +47,7 @@ export function GamesPage() {
                   <b>{name(gd.game.homeTeamId)}</b> – <b>{name(gd.game.awayTeamId)}</b>
                   <div className="muted">{comps.get(gd.game.competitionId)?.name}</div>
                 </span>
-                <span className="strong" style={{ fontSize: '1.2rem', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="list-score">
                   {gd.stats.teams.home.score} – {gd.stats.teams.away.score}
                 </span>
                 <ResultBadge gd={gd} myTeamId={myTeam?.id} />

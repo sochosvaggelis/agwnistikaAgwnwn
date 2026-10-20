@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { db, TABLES } from './db'
-import type { Game, GameEvent, Player, Side } from './types'
+import type { Competition, Game, GameEvent, Player, Side } from './types'
+import { availableKinds, competitionKind, sameName } from './competitions'
 import type { Draft } from '../live/flow'
 import { currentClockMs, DEFAULT_OT_MIN, DEFAULT_PERIOD_MIN, periodLengthMs } from '../stats/rules'
 
@@ -8,12 +9,47 @@ const now = () => Date.now()
 
 // ---------- seasons & competitions ----------
 
-export async function addSeason(name: string): Promise<number> {
-  return db.seasons.add({ name: name.trim(), createdAt: now() }) as Promise<number>
+export type NewCompetition = Required<Pick<Competition, 'kind' | 'name'>>
+
+/** Create a season together with the competitions it starts with. */
+export async function addSeason(name: string, competitions: NewCompetition[] = []): Promise<number> {
+  return db.transaction('rw', db.seasons, db.competitions, async () => {
+    const t = now()
+    const seasonId = await db.seasons.add({ name: name.trim(), createdAt: t }) as number
+    await db.competitions.bulkAdd(competitions.map(c => ({ seasonId, kind: c.kind, name: c.name.trim(), createdAt: t })))
+    return seasonId
+  })
 }
 
-export async function addCompetition(seasonId: number, name: string): Promise<number> {
-  return db.competitions.add({ seasonId, name: name.trim(), createdAt: now() }) as Promise<number>
+/** Add a kind of competition the season doesn't have yet. Throws 'kind-taken' or 'duplicate-name'. */
+export async function addCompetition(seasonId: number, c: NewCompetition): Promise<number> {
+  return db.transaction('rw', db.competitions, async () => {
+    const existing = await db.competitions.where('seasonId').equals(seasonId).toArray()
+    if (!availableKinds(existing).includes(c.kind)) throw new Error('kind-taken')
+    if (existing.some(o => sameName(o.name, c.name))) throw new Error('duplicate-name')
+    return await db.competitions.add({ seasonId, kind: c.kind, name: c.name.trim(), createdAt: now() }) as number
+  })
+}
+
+/** The season's competition of this kind, created when it doesn't exist yet. */
+export async function ensureCompetition(seasonId: number, c: NewCompetition): Promise<number> {
+  return db.transaction('rw', db.competitions, async () => {
+    const existing = await db.competitions.where('seasonId').equals(seasonId).toArray()
+    const found = existing.find(o => competitionKind(o) === c.kind)
+    return found ? found.id! : addCompetition(seasonId, c)
+  })
+}
+
+/** Throws 'duplicate-name' when another competition of the season already has the name. */
+export async function renameCompetition(id: number, name: string) {
+  await db.transaction('rw', db.competitions, async () => {
+    const c = await db.competitions.get(id)
+    if (!c) return
+    const others = await db.competitions.where('seasonId').equals(c.seasonId).filter(o => o.id !== id).toArray()
+    if (others.some(o => sameName(o.name, name))) throw new Error('duplicate-name')
+    // Store the kind, since an older competition's new name may no longer reveal it
+    await db.competitions.update(id, { name: name.trim(), kind: competitionKind(c) })
+  })
 }
 
 export async function deleteSeason(id: number) {

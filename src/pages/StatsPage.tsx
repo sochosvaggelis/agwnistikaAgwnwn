@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useI18n, type TKey } from '../i18n'
-import { mySideOf, useById, useGamesData, useMyTeam, usePlayers } from '../hooks'
+import { mySideOf, useById, useGamesData, useMyTeam, usePlayers, useTeams } from '../hooks'
 import { SeasonFilter, useSeasonFilter } from '../components/SeasonFilter'
 import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
@@ -9,10 +9,12 @@ import { ModeToggle } from '../components/ModeToggle'
 import { aggregatePlayers, aggregateTeam, type PlayerAgg } from '../stats/aggregate'
 import { pir, reb, shotsOf, type StatLine } from '../stats/compute'
 import { playerLabel } from '../db/repo'
+import { fmtDate } from '../format'
+import { opposite } from '../stats/rules'
 import type { Player } from '../db/types'
 
 export function StatsPage() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const myTeam = useMyTeam()
   const filter = useSeasonFilter()
   const myId = myTeam?.id
@@ -21,22 +23,48 @@ export function StatsPage() {
     [filter.key, myId],
   )
   const players = useById(usePlayers())
+  const teams = useById(useTeams())
   const [mode, setMode] = useState<'avg' | 'total'>('avg')
+  /** The picked game, tied to the season/competition filter it was picked under */
+  const [gamePick, setGamePick] = useState<{ key: string; id: number } | null>(null)
 
   if (myTeam === undefined) return null
   if (myTeam === null) return <p className="empty">{t('stats.needMyTeam')} <Link to="/teams">{t('nav.teams')}</Link></p>
 
   const sideOf = (gd: NonNullable<typeof games>[number]) => mySideOf(gd.game, myId)
-  const team = games ? aggregateTeam(games, sideOf) : null
-  const aggs = games ? aggregatePlayers(games, sideOf) : []
-  const shots = games ? games.flatMap(gd => shotsOf(gd.events, e => e.side === sideOf(gd))) : []
+  const gameId = gamePick && gamePick.key === filter.key && games?.some(gd => gd.game.id === gamePick.id) ? gamePick.id : null
+  const scoped = games && gameId != null ? games.filter(gd => gd.game.id === gameId) : games
+  const team = scoped ? aggregateTeam(scoped, sideOf) : null
+  const aggs = scoped ? aggregatePlayers(scoped, sideOf) : []
+  const shots = scoped ? scoped.flatMap(gd => shotsOf(gd.events, e => e.side === sideOf(gd))) : []
+
+  const gameLabel = (gd: NonNullable<typeof games>[number]) => {
+    const side = sideOf(gd) ?? 'home'
+    const oppId = side === 'home' ? gd.game.awayTeamId : gd.game.homeTeamId
+    const score = `${gd.stats.teams[side].score}–${gd.stats.teams[opposite(side)].score}`
+    return `${fmtDate(gd.game.date, lang)} ${side === 'home' ? t('common.vs') : t('common.at')} ${teams.get(oppId)?.name ?? ''} ${score}`
+  }
 
   return (
     <>
       <div className="page-head">
         <h1>{t('stats.title')} — {myTeam.name}</h1>
       </div>
-      <SeasonFilter filter={filter} />
+      <SeasonFilter filter={filter}>
+        <label>
+          {t('common.game')}
+          <select
+            value={gameId ?? 'all'}
+            onChange={e => setGamePick(e.target.value === 'all' ? null : { key: filter.key, id: Number(e.target.value) })}
+            disabled={!games?.length}
+          >
+            <option value="all">{t('stats.allGames')}</option>
+            {[...(games ?? [])]
+              .sort((a, b) => b.game.date.localeCompare(a.game.date))
+              .map(gd => <option key={gd.game.id} value={gd.game.id}>{gameLabel(gd)}</option>)}
+          </select>
+        </label>
+      </SeasonFilter>
 
       {team && team.gp === 0 && <p className="empty">{t('common.noData')}</p>}
       {team && team.gp > 0 && (
@@ -89,7 +117,7 @@ export function StatsPage() {
 
           <div className="card">
             <h2>{t('game.shotChart')}</h2>
-            <ShotChart shots={shots} />
+            <ShotChart shots={shots} controls />
           </div>
         </>
       )}

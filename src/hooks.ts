@@ -1,8 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { db } from './db/db'
-import type { Competition, Game, GameEvent, Player, Season, Side, Team } from './db/types'
+import type { Competition, CompetitionKind, Game, GameEvent, Player, Season, Side, Team } from './db/types'
+import { DEFAULT_KINDS } from './db/competitions'
+import type { NewCompetition } from './db/repo'
 import { computeGameStats, type GameStats } from './stats/compute'
+import { useI18n } from './i18n'
 
 export function useTeams(): Team[] | undefined {
   return useLiveQuery(() => db.teams.orderBy('name').toArray(), [])
@@ -18,6 +21,18 @@ export function useSeasons(): Season[] | undefined {
 
 export function useCompetitions(): Competition[] | undefined {
   return useLiveQuery(() => db.competitions.toArray(), [])
+}
+
+/** The name a competition kind gets when it's added, in the current language */
+export function useKindName(): (kind: CompetitionKind) => string {
+  const { t } = useI18n()
+  return kind => t(`competition.${kind}`)
+}
+
+/** Competitions every new season starts with */
+export function useDefaultCompetitions(): NewCompetition[] {
+  const kindName = useKindName()
+  return DEFAULT_KINDS.map(kind => ({ kind, name: kindName(kind) }))
 }
 
 export function usePlayers(): Player[] | undefined {
