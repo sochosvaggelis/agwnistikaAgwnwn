@@ -21,6 +21,24 @@ export function describeEvent(ev: GameEvent, players: Map<number, Player>, t: TF
   }
 }
 
+/** Compact form for the live screen, using the action button labels: "#3 2Π ✗", "#9 Κόψιμο". */
+export function describeShort(ev: GameEvent, players: Map<number, Player>, t: TFunction): { who: string; what: string } {
+  const p = ev.playerId != null ? players.get(ev.playerId) : undefined
+  const who = ev.playerId == null ? t('ev.coach') : p?.number ? `#${p.number}` : (p?.name ?? '?')
+  switch (ev.type) {
+    case 'FG2':
+    case 'FG3':
+    case 'FT':
+      return { who, what: t(`act.${ev.type}${ev.made ? '+' : '-'}`) }
+    case 'FOUL':
+      return { who, what: `${t('act.FOUL')} (${t(`foul.${ev.foulType ?? 'P'}`)})` }
+    case 'COACH_FOUL':
+      return { who, what: t(`foul.${ev.coachFoulType ?? 'C'}`) }
+    default:
+      return { who, what: t(`act.${ev.type}`) }
+  }
+}
+
 /** Group consecutive events by their undo group, newest group first. */
 export function groupEvents(events: GameEvent[]): GameEvent[][] {
   const groups: GameEvent[][] = []

@@ -14,7 +14,7 @@ import { useI18n } from '../i18n'
 import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
 import { StatTable } from '../components/StatTable'
-import { describeEvent, groupEvents } from './describe'
+import { describeEvent, describeShort, groupEvents } from './describe'
 import './live.css'
 
 const SIDES: Side[] = ['home', 'away']
@@ -141,7 +141,10 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
 
   const teamName = (side: Side) => teams?.[side === 'home' ? 0 : 1]?.name ?? ''
   const groups = useMemo(() => groupEvents(events), [events])
-  const lastGroupText = groups[0]?.map(e => describeEvent(e, playerMap, t)).join(' · ')
+  const lastGroupText = groups[0]?.map(e => {
+    const d = describeShort(e, playerMap, t)
+    return `${d.who} ${d.what}`
+  }).join(' · ')
 
   return (
     <div className="live">
@@ -364,10 +367,17 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
           <p className="panel-hint">{t('live.tapPlayer')}</p>
           <h4>{t('live.recent')}</h4>
           <ul className="recent-list">
-            {groups.slice(0, 8).map(g => (
+            {groups.slice(0, 12).map(g => (
               <li key={g[0].group} className={`side-${g[0].side}`}>
                 <span className="log-period">{periodLabel(g[0].period, lang)}</span>
-                {g.map(e => describeEvent(e, playerMap, t)).join(' · ')}
+                {g.map(e => {
+                  const d = describeShort(e, playerMap, t)
+                  return (
+                    <span key={e.id} className={`ev-chip side-${e.side}`}>
+                      <b>{d.who}</b> {d.what}
+                    </span>
+                  )
+                })}
               </li>
             ))}
           </ul>

@@ -1,6 +1,8 @@
 .live {
   height: 100dvh;
   display: grid;
+  /* minmax(0, …) keeps the bars from stretching the screen wider than the viewport */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--bg);
   overflow: hidden;
@@ -217,8 +219,22 @@
 
 .panel-court .court-input { flex: 1; min-height: 0; width: 100%; }
 
-.recent-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; font-size: 0.9rem; }
-.recent-list li { padding: 6px 8px; border-left: 4px solid transparent; border-bottom: 1px solid var(--border); }
+.recent-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1; font-size: 0.95rem; }
+.recent-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 6px 8px;
+  border-left: 4px solid transparent;
+  border-bottom: 1px solid var(--border);
+}
+.recent-list .log-period { margin-right: 2px; }
+.ev-chip { white-space: nowrap; padding: 1px 6px; border-radius: 6px; }
+.ev-chip.side-home { background: var(--home-soft); }
+.ev-chip.side-away { background: var(--away-soft); }
+.ev-chip.side-home b { color: var(--home); }
+.ev-chip.side-away b { color: var(--away); }
 .recent-list li.side-home { border-left-color: var(--home); }
 .recent-list li.side-away { border-left-color: var(--away); }
 .panel-idle h4 { margin: 0; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -232,9 +248,9 @@
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
-.live-bottom .btn { min-height: 52px; }
-.btn-undo {
-  flex: 1;
+.live-bottom .btn { min-height: 52px; flex-shrink: 0; }
+.live-bottom .btn-undo {
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -265,3 +281,17 @@
 .log-text.side-away { border-left-color: var(--away); }
 .clock-adjust { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
 .clock-big { font-size: 3rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ---------- portrait tablets (Android 16 ignores the manifest's landscape lock on large screens) ---------- */
+@media (orientation: portrait) {
+  .live-top { gap: 8px; padding: 6px 8px; }
+  .team-score { gap: 8px; }
+  .team-score .team-name { font-size: 1rem; }
+  .team-score .score { font-size: 2rem; }
+  .live-mid { gap: 6px; }
+  .live-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 6px; padding: 6px; }
+  .roster-grid { grid-template-columns: minmax(0, 1fr); }
+  .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 620px; }
+  .live-bottom .btn { padding: 8px 12px; }
+  .panel-court .court-input { flex: 0 0 auto; height: auto; }
+}
