@@ -13,10 +13,12 @@ interface Props {
   onTap?: (x: number, y: number) => void
   /** Shade the area matching the shot being entered */
   highlight?: 'FG2' | 'FG3'
+  /** Mark the spot of the play being entered */
+  marker?: { x: number; y: number }
   className?: string
 }
 
-export function Court({ shots = [], onTap, highlight, className }: Props) {
+export function Court({ shots = [], onTap, highlight, marker, className }: Props) {
   function handlePointer(e: PointerEvent<SVGSVGElement>) {
     if (!onTap) return
     const svg = e.currentTarget
@@ -58,6 +60,12 @@ export function Court({ shots = [], onTap, highlight, className }: Props) {
           ),
         )}
       </g>
+      {marker && (
+        <g className="court-marker">
+          <circle cx={marker.x} cy={marker.y} r={0.45} />
+          <circle cx={marker.x} cy={marker.y} r={0.09} className="court-marker-dot" />
+        </g>
+      )}
     </svg>
   )
 }

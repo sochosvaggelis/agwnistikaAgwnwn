@@ -93,6 +93,9 @@ export const en = {
   'newGame.needPlayers': 'Each team needs at least one player.',
 
   'live.tapPlayer': 'Tap a player',
+  'live.tapCourt': 'Tap the court where the play happened',
+  'live.orTapPlayer': 'or tap a player directly, without a spot',
+  'live.moveSpot': 'Tap the court again to move the spot',
   'live.cancel': 'Cancel',
   'live.back': 'Back',
   'live.confirmExit': 'Leave the game screen? Everything is saved and you can continue later.',

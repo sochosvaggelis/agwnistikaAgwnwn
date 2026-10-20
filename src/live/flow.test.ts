@@ -149,3 +149,51 @@ describe('foul flow', () => {
     expect(writes).toEqual([{ side: 'home', playerId: 1, type: 'FOUL', foulType: 'P' }])
   })
 })
+
+describe('court-first flow', () => {
+  const spot = (x: number, y: number): Input => ({ t: 'court', x, y })
+
+  it('asks for the player after a court tap, then stores the shot with that spot', () => {
+    const first = run([spot(7.512, 9)])
+    expect(first.step).toEqual({ kind: 'player', at: { x: 7.51, y: 9 } })
+    expect(first.writes).toHaveLength(0)
+
+    const { step, writes } = run([spot(7.512, 9), home(1), { t: 'action', action: 'FG3+' }])
+    expect(step).toMatchObject({ kind: 'pick', purpose: 'assist' })
+    expect(writes).toEqual([{ side: 'home', playerId: 1, type: 'FG3', made: true, x: 7.51, y: 9 }])
+  })
+
+  it('moves the spot when the court is tapped again', () => {
+    const { step } = run([spot(2, 2), spot(8, 3), home(1), spot(9, 4), away(9)])
+    expect(step).toEqual({ kind: 'action', actor: { side: 'away', playerId: 9 }, at: { x: 9, y: 4 } })
+  })
+
+  it('keeps the spot on fouls but not on free throws', () => {
+    const foul = run([spot(4, 5), away(9), { t: 'action', action: 'FOUL' }, { t: 'foulType', foulType: 'P' }, home(1)])
+    expect(foul.writes).toEqual([{ side: 'away', playerId: 9, type: 'FOUL', foulType: 'P', x: 4, y: 5, targetPlayerId: 1 }])
+
+    const ft = run([spot(4, 5), home(1), { t: 'action', action: 'FT+' }])
+    expect(ft.writes).toEqual([{ side: 'home', playerId: 1, type: 'FT', made: true }])
+  })
+
+  it('tells a blocked 3 from the spot without asking', () => {
+    const { step, writes } = run([spot(7.5, 10), away(9), { t: 'action', action: 'BLK' }, home(1)])
+    expect(step).toMatchObject({ kind: 'pick', purpose: 'rebound' })
+    expect(writes).toEqual([
+      { side: 'home', playerId: 1, type: 'FG3', made: false, x: 7.5, y: 10 },
+      { side: 'away', playerId: 9, type: 'BLK', targetPlayerId: 1 },
+    ])
+  })
+
+  it('ignores court taps while a follow-up prompt is open', () => {
+    const { step, writes } = run([spot(7.5, 3), home(1), { t: 'action', action: 'FG2+' }, spot(1, 1)])
+    expect(step).toMatchObject({ kind: 'pick', purpose: 'assist' })
+    expect(writes).toHaveLength(1)
+  })
+
+  it('cancelling before choosing a player stores nothing', () => {
+    const { step, writes } = run([spot(7.5, 3), { t: 'cancel' }])
+    expect(step.kind).toBe('idle')
+    expect(writes).toHaveLength(0)
+  })
+})

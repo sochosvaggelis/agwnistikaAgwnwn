@@ -1,5 +1,5 @@
 import type { CoachFoulType, FoulType, GameEvent, Side } from '../db/types'
-import { defaultFreeThrows, opposite, TEAM_FOUL_PENALTY } from '../stats/rules'
+import { defaultFreeThrows, isThreeByLocation, opposite, TEAM_FOUL_PENALTY } from '../stats/rules'
 
 /** An event as produced by the flow; the writer fills in game, ordering, period and clock. */
 export type Draft = Omit<GameEvent, 'id' | 'gameId' | 'seq' | 'group' | 'period' | 'clockMs' | 'createdAt'>
@@ -23,11 +23,18 @@ interface PlayerRef {
   playerId: number
 }
 
+/** Where on the half court the play happened, in meters */
+export interface Spot {
+  x: number
+  y: number
+}
+
 export type Step =
   | { kind: 'idle' }
-  | { kind: 'action'; actor: PlayerRef }
+  | { kind: 'player'; at: Spot } // the court was tapped, now choose who
+  | { kind: 'action'; actor: PlayerRef; at?: Spot }
   | { kind: 'court'; actor: PlayerRef; shot: 'FG2' | 'FG3'; made: boolean }
-  | { kind: 'foulType'; actor: PlayerRef }
+  | { kind: 'foulType'; actor: PlayerRef; at?: Spot }
   | { kind: 'coachFoulType'; side: Side }
   | { kind: 'shotKind'; blocker: PlayerRef; shooter: PlayerRef }
   | { kind: 'ftCount'; shooterSide: Side; shooterId?: number; suggested: number }
@@ -40,9 +47,9 @@ export type PickStep =
   | { kind: 'pick'; purpose: 'blocker'; shooter: PlayerRef }
   | { kind: 'pick'; purpose: 'stolenFrom'; actor: PlayerRef }
   | { kind: 'pick'; purpose: 'stealBy'; actor: PlayerRef }
-  | { kind: 'pick'; purpose: 'fouled'; actor: PlayerRef; foulType: FoulType }
+  | { kind: 'pick'; purpose: 'fouled'; actor: PlayerRef; foulType: FoulType; at?: Spot }
   | { kind: 'pick'; purpose: 'ftShooter'; shooterSide: Side; total: number }
-  | { kind: 'pick'; purpose: 'blockedShooter'; actor: PlayerRef }
+  | { kind: 'pick'; purpose: 'blockedShooter'; actor: PlayerRef; at?: Spot }
 
 export type Input =
   | { t: 'player'; side: Side; playerId: number }
@@ -85,10 +92,20 @@ function reboundAfterMiss(shooter: PlayerRef | undefined, missSide: Side, canBlo
   return { kind: 'pick', purpose: 'rebound', missSide, shooter, canBlock }
 }
 
+function spotOf(input: { x: number; y: number }): Spot {
+  return { x: round2(input.x), y: round2(input.y) }
+}
+
+/** Whether a court tap means something in the current step. */
+export function acceptsSpot(step: Step): boolean {
+  return step.kind === 'idle' || step.kind === 'player' || step.kind === 'action' || step.kind === 'court'
+}
+
 /** Which players may be tapped in the current step. */
 export function eligibility(step: Step): { sides: Side[]; exclude?: number } {
   switch (step.kind) {
     case 'idle':
+    case 'player':
     case 'action':
       return { sides: ['home', 'away'] }
     case 'pick':
@@ -123,30 +140,29 @@ export function advance(step: Step, input: Input, ctx: FlowContext): Result {
 
   switch (step.kind) {
     case 'idle':
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId } })
+    case 'player': {
+      const at = step.kind === 'player' ? step.at : undefined
+      if (input.t === 'court') return go({ kind: 'player', at: spotOf(input) })
+      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at })
       if (input.t === 'coachFoul') return go({ kind: 'coachFoulType', side: input.side })
       return go(step)
-
-    case 'action':
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId } })
-      if (input.t === 'coachFoul') return go({ kind: 'coachFoulType', side: input.side })
-      if (input.t === 'action') return onAction(step.actor, input.action)
-      return go(step)
-
-    case 'court': {
-      if (input.t !== 'court' && input.t !== 'skip') return go(step)
-      const shot: Draft = {
-        side: step.actor.side, playerId: step.actor.playerId, type: step.shot, made: step.made,
-        ...(input.t === 'court' ? { x: round2(input.x), y: round2(input.y) } : {}),
-      }
-      if (step.made) return go({ kind: 'pick', purpose: 'assist', shooter: step.actor }, shot)
-      return go(reboundAfterMiss(step.actor, step.actor.side, true), shot)
     }
 
+    case 'action':
+      if (input.t === 'court') return go({ ...step, at: spotOf(input) })
+      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at: step.at })
+      if (input.t === 'coachFoul') return go({ kind: 'coachFoulType', side: input.side })
+      if (input.t === 'action') return onAction(step.actor, input.action, step.at)
+      return go(step)
+
+    case 'court':
+      if (input.t !== 'court' && input.t !== 'skip') return go(step)
+      return shotTaken(step.actor, step.shot, step.made, input.t === 'court' ? spotOf(input) : undefined)
+
     case 'foulType':
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId } })
+      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at: step.at })
       if (input.t !== 'foulType') return go(step)
-      return go({ kind: 'pick', purpose: 'fouled', actor: step.actor, foulType: input.foulType })
+      return go({ kind: 'pick', purpose: 'fouled', actor: step.actor, foulType: input.foulType, at: step.at })
 
     case 'coachFoulType': {
       if (input.t !== 'coachFoulType') return go(step)
@@ -154,12 +170,9 @@ export function advance(step: Step, input: Input, ctx: FlowContext): Result {
       return go({ kind: 'ftCount', shooterSide: opposite(step.side), suggested: 1 }, foul)
     }
 
-    case 'shotKind': {
+    case 'shotKind':
       if (input.t !== 'shotKind') return go(step)
-      const shot: Draft = { side: step.shooter.side, playerId: step.shooter.playerId, type: input.shot, made: false }
-      const blk: Draft = { side: step.blocker.side, playerId: step.blocker.playerId, type: 'BLK', targetPlayerId: step.shooter.playerId }
-      return go(reboundAfterMiss(step.shooter, step.shooter.side, false), shot, blk)
-    }
+      return blockedShot(step.blocker, step.shooter, input.shot)
 
     case 'ftCount': {
       if (input.t !== 'ftCount') return go(step)
@@ -183,22 +196,42 @@ export function advance(step: Step, input: Input, ctx: FlowContext): Result {
   }
 }
 
-function onAction(actor: PlayerRef, action: ActionKey): Result {
+/** A field goal; without a spot yet, ask for one first. */
+function fieldGoal(actor: PlayerRef, shot: 'FG2' | 'FG3', made: boolean, at?: Spot): Result {
+  if (!at) return go({ kind: 'court', actor, shot, made })
+  return shotTaken(actor, shot, made, at)
+}
+
+function shotTaken(actor: PlayerRef, shot: 'FG2' | 'FG3', made: boolean, at?: Spot): Result {
+  const ev: Draft = { side: actor.side, playerId: actor.playerId, type: shot, made, ...at }
+  if (made) return go({ kind: 'pick', purpose: 'assist', shooter: actor }, ev)
+  return go(reboundAfterMiss(actor, actor.side, true), ev)
+}
+
+function blockedShot(blocker: PlayerRef, shooter: PlayerRef, shot: 'FG2' | 'FG3', at?: Spot): Result {
+  const miss: Draft = { side: shooter.side, playerId: shooter.playerId, type: shot, made: false, ...at }
+  const blk: Draft = { side: blocker.side, playerId: blocker.playerId, type: 'BLK', targetPlayerId: shooter.playerId }
+  return go(reboundAfterMiss(shooter, shooter.side, false), miss, blk)
+}
+
+function onAction(actor: PlayerRef, action: ActionKey, at?: Spot): Result {
   const base = { side: actor.side, playerId: actor.playerId }
+  // Free throws are always taken from the line, so only other events keep the spot
+  const placed = { ...base, ...at }
   switch (action) {
-    case 'FG2+': return go({ kind: 'court', actor, shot: 'FG2', made: true })
-    case 'FG2-': return go({ kind: 'court', actor, shot: 'FG2', made: false })
-    case 'FG3+': return go({ kind: 'court', actor, shot: 'FG3', made: true })
-    case 'FG3-': return go({ kind: 'court', actor, shot: 'FG3', made: false })
+    case 'FG2+': return fieldGoal(actor, 'FG2', true, at)
+    case 'FG2-': return fieldGoal(actor, 'FG2', false, at)
+    case 'FG3+': return fieldGoal(actor, 'FG3', true, at)
+    case 'FG3-': return fieldGoal(actor, 'FG3', false, at)
     case 'FT+': return done({ ...base, type: 'FT', made: true })
     case 'FT-': return go(reboundAfterMiss(actor, actor.side, false), { ...base, type: 'FT', made: false })
-    case 'OREB': return done({ ...base, type: 'OREB' })
-    case 'DREB': return done({ ...base, type: 'DREB' })
-    case 'AST': return done({ ...base, type: 'AST' })
-    case 'STL': return go({ kind: 'pick', purpose: 'stolenFrom', actor }, { ...base, type: 'STL' })
-    case 'TOV': return go({ kind: 'pick', purpose: 'stealBy', actor }, { ...base, type: 'TOV' })
-    case 'BLK': return go({ kind: 'pick', purpose: 'blockedShooter', actor })
-    case 'FOUL': return go({ kind: 'foulType', actor })
+    case 'OREB': return done({ ...placed, type: 'OREB' })
+    case 'DREB': return done({ ...placed, type: 'DREB' })
+    case 'AST': return done({ ...placed, type: 'AST' })
+    case 'STL': return go({ kind: 'pick', purpose: 'stolenFrom', actor }, { ...placed, type: 'STL' })
+    case 'TOV': return go({ kind: 'pick', purpose: 'stealBy', actor }, { ...placed, type: 'TOV' })
+    case 'BLK': return go({ kind: 'pick', purpose: 'blockedShooter', actor, at })
+    case 'FOUL': return go({ kind: 'foulType', actor, at })
   }
 }
 
@@ -234,13 +267,15 @@ function onPick(step: PickStep, input: Input, ctx: FlowContext): Result {
       return picked ? done({ ...picked, type: 'STL' }) : done()
 
     case 'blockedShooter':
-      if (!picked) return done({ side: step.actor.side, playerId: step.actor.playerId, type: 'BLK' })
+      if (!picked) return done({ side: step.actor.side, playerId: step.actor.playerId, type: 'BLK', ...step.at })
+      // The spot tells a 2 from a 3, so only ask when there is none
+      if (step.at) return blockedShot(step.actor, picked, isThreeByLocation(step.at.x, step.at.y) ? 'FG3' : 'FG2', step.at)
       return go({ kind: 'shotKind', blocker: step.actor, shooter: picked })
 
     case 'fouled': {
       const { actor, foulType } = step
       const foul: Draft = {
-        side: actor.side, playerId: actor.playerId, type: 'FOUL', foulType,
+        side: actor.side, playerId: actor.playerId, type: 'FOUL', foulType, ...step.at,
         ...(picked ? { targetPlayerId: picked.playerId } : {}),
       }
       if (foulType === 'O') return done(foul, { side: actor.side, playerId: actor.playerId, type: 'TOV' })
@@ -266,12 +301,12 @@ function finish(step: Step): Result {
   }
   if (step.kind === 'pick' && step.purpose === 'fouled') {
     const { actor, foulType } = step
-    const foul: Draft = { side: actor.side, playerId: actor.playerId, type: 'FOUL', foulType }
+    const foul: Draft = { side: actor.side, playerId: actor.playerId, type: 'FOUL', foulType, ...step.at }
     if (foulType === 'O') return done(foul, { side: actor.side, playerId: actor.playerId, type: 'TOV' })
     return done(foul)
   }
   if (step.kind === 'pick' && step.purpose === 'blockedShooter') {
-    return done({ side: step.actor.side, playerId: step.actor.playerId, type: 'BLK' })
+    return done({ side: step.actor.side, playerId: step.actor.playerId, type: 'BLK', ...step.at })
   }
   return done()
 }

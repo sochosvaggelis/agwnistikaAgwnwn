@@ -14,7 +14,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Game clock | Optional per game (start/stop; events get game time when on) |
 | Substitutions | Not tracked → no minutes played, no +/- |
 | Rules | FIBA: 4×10, OT 5 min, foul-out at 5, team-foul penalty from the 5th foul in a quarter |
-| Shot entry | Player → action → court location (skippable) |
+| Shot entry | Court spot → player → action; the half court is always shown in the live screen's center column (changed 2026-10-21) |
 | Chaining | Skippable follow-up prompts (see Input flow) |
 | Opponents | Saved reusable teams, or create one at game time and keep it |
 | Fouls | Type: personal / shooting / offensive / technical / unsportsmanlike + fouled player |
@@ -29,9 +29,13 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 
 ## Input flow
 
-1. Tap a player: home roster on the left, away roster on the right.
+1. Tap the spot on the half court (always visible above the center panel), then the player: home roster on the left, away roster on the right. Tapping the court again moves the spot.
+   - Shortcut: tap a player first to skip the spot (e.g. free throws).
 2. Tap an action: `2PT✓ 2PT✗ 3PT✓ 3PT✗ FT✓ FT✗ OREB DREB AST STL BLK TOV FOUL`
-3. Field goals: an optional court tap for the shot chart (Skip button).
+   - With a spot, the 2PT or 3PT buttons for that zone are outlined.
+   - The spot is stored on the player's event (shot, rebound, steal, turnover, foul…), never on free throws.
+3. Field goals without a spot: an optional court tap for the shot chart (Skip button).
+   - A standalone block with a spot takes 2PT/3PT from the spot instead of asking.
 4. Chained prompts, each with a "none/skip" option:
    - Made FG → *Assist by?* (teammates)
    - Missed FG → *Blocked by?* (opponents) → *Rebound by?* (both rosters; OREB/DREB inferred)

@@ -243,6 +243,8 @@ table { border-collapse: collapse; width: 100%; }
 .court-lines * { vector-effect: non-scaling-stroke; }
 .court-highlight { fill: var(--accent); opacity: 0.12; }
 .court-tappable { cursor: crosshair; }
+.court-marker circle { fill: var(--accent); fill-opacity: 0.25; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; }
+.court-marker .court-marker-dot { fill-opacity: 1; stroke: none; }
 .shot-made { fill: var(--made); stroke: #fff; stroke-width: 0.05; }
 .shot-missed line { stroke: var(--miss); stroke-width: 0.1; stroke-linecap: round; }
 .shot-chart-wrap { max-width: 420px; }

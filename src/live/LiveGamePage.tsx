@@ -7,9 +7,11 @@ import {
   addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, setPeriod, sortPlayers,
   startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
-import { advance, isEligible, type ActionKey, type Draft, type FlowContext, type Input, type Step } from './flow'
+import { acceptsSpot, advance, isEligible, type ActionKey, type Draft, type FlowContext, type Input, type Step } from './flow'
 import { computeGameStats, foulCounts, teamFoulsInPeriod, type GameStats, type StatLine } from '../stats/compute'
-import { currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, periodLabel, TEAM_FOUL_PENALTY } from '../stats/rules'
+import {
+  currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, periodLabel, TEAM_FOUL_PENALTY,
+} from '../stats/rules'
 import { useI18n } from '../i18n'
 import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
@@ -94,9 +96,13 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     const r = advance(prev, input, ctx)
     if (r.step === prev && !r.writes.length) return
     const entry: BackEntry = { step: prev, ids: [] }
+    // Picking the spot or the player (again) restarts the play, so Back only retraces those
     if (r.step.kind === 'idle') backStack.current = []
-    else if (r.step.kind === 'action') backStack.current = [{ step: IDLE, ids: [] }]
-    else backStack.current.push(entry)
+    else if (r.step.kind === 'player') backStack.current = [{ step: IDLE, ids: [] }]
+    else if (r.step.kind === 'action') {
+      backStack.current = [{ step: IDLE, ids: [] }]
+      if (r.step.at) backStack.current.push({ step: { kind: 'player', at: r.step.at }, ids: [] })
+    } else backStack.current.push(entry)
     setStep(r.step)
     if (r.writes.length) {
       const drafts: Draft[] = r.writes
@@ -244,6 +250,13 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
           onAdd={() => setModal({ addTo: 'home' })}
         />
         <div className="live-center">
+          <div className={`live-court${acceptsSpot(step) ? '' : ' off'}`}>
+            <Court
+              onTap={acceptsSpot(step) ? (x, y) => dispatch({ t: 'court', x, y }) : undefined}
+              highlight={step.kind === 'court' ? step.shot : undefined}
+              marker={'at' in step ? step.at : undefined}
+            />
+          </div>
           <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         </div>
         <RosterColumn
@@ -345,7 +358,7 @@ interface RosterProps {
 
 function RosterColumn({ side, players, stats, step, onPlayer, onCoach, onAdd }: RosterProps) {
   const { t } = useI18n()
-  const picking = step.kind === 'pick'
+  const picking = step.kind === 'pick' || step.kind === 'player'
   const selected = step.kind === 'action' || step.kind === 'foulType' ? step.actor : undefined
   const coach = stats.teams[side].coachFouls
 
@@ -435,7 +448,7 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
     case 'idle':
       return (
         <div className="panel panel-idle">
-          <p className="panel-hint">{t('live.tapPlayer')}</p>
+          <p className="panel-hint">{t('live.tapCourt')}<small>{t('live.orTapPlayer')}</small></p>
           <h4>{t('live.recent')}</h4>
           <ul className="recent-list">
             {groups.slice(0, 12).map(g => (
@@ -455,7 +468,19 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
         </div>
       )
 
-    case 'action':
+    case 'player':
+      return (
+        <div className="panel">
+          <PanelHead title={t('live.tapPlayer')} subtitle={t('live.moveSpot')} />
+          <div className="panel-foot">
+            <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.cancel')}</button>
+          </div>
+        </div>
+      )
+
+    case 'action': {
+      // The spot already tells a 2 from a 3, so point out those shot buttons
+      const zone = step.at && (isThreeByLocation(step.at.x, step.at.y) ? 'FG3' : 'FG2')
       return (
         <div className="panel">
           <PanelHead title={label(step.actor.playerId)} side={step.actor.side} />
@@ -463,7 +488,7 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
             {ACTIONS.flat().map(a => (
               <button
                 key={a}
-                className={`btn action-btn act-${a.replace(/[+-]/, m => (m === '+' ? 'made' : 'miss'))}`}
+                className={`btn action-btn act-${a.replace(/[+-]/, m => (m === '+' ? 'made' : 'miss'))}${zone && a.startsWith(zone) ? ' suggested' : ''}`}
                 onClick={() => dispatch({ t: 'action', action: a })}
               >
                 {t(`act.${a}`)}
@@ -475,16 +500,16 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
           </div>
         </div>
       )
+    }
 
     case 'court':
       return (
-        <div className="panel panel-court">
+        <div className="panel">
           <PanelHead
             title={`${label(step.actor.playerId)} — ${t(`ev.${step.shot}.${step.made ? 'made' : 'missed'}`)}`}
-            subtitle={t('live.shotLocation')}
             side={step.actor.side}
           />
-          <Court onTap={(x, y) => dispatch({ t: 'court', x, y })} highlight={step.shot} className="court-input" />
+          <p className="panel-hint">↑ {t('live.shotLocation')}</p>
           {foot(<button className="btn btn-lg" onClick={() => dispatch({ t: 'skip' })}>{t('live.skip')} ›</button>)}
         </div>
       )
@@ -611,9 +636,9 @@ function pickText(step: Extract<Step, { kind: 'pick' }>, label: (id: number) => 
   }
 }
 
-function PanelHead({ title, subtitle, side }: { title: string; subtitle?: string; side: Side }) {
+function PanelHead({ title, subtitle, side }: { title: string; subtitle?: string; side?: Side }) {
   return (
-    <div className={`panel-head side-${side}`}>
+    <div className={`panel-head${side ? ` side-${side}` : ''}`}>
       <div className="panel-title">{title}</div>
       {subtitle && <div className="panel-subtitle">{subtitle}</div>}
     </div>
