@@ -4,6 +4,7 @@ import { clearAllData, exportBackup, parseBackup, restoreBackup, setSetting } fr
 import { requestPersistentStorage } from '../db/db'
 import { DEFAULT_REMINDER_DAYS, SETTING_LAST_BACKUP, SETTING_REMINDER_DAYS, useSetting } from '../hooks'
 import { fmtDateTime, todayISO } from '../format'
+import { useAppUpdate } from '../pwa'
 
 async function backupFile(): Promise<File> {
   const backup = await exportBackup()
@@ -17,6 +18,8 @@ export function SettingsPage() {
   const [persisted, setPersisted] = useState<boolean | null>(null)
   const [msg, setMsg] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  const update = useAppUpdate()
+  const [updateState, setUpdateState] = useState<'idle' | 'checking' | 'latest' | 'failed'>('idle')
 
   useEffect(() => {
     navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(false))
@@ -58,6 +61,17 @@ export function SettingsPage() {
       setMsg(t('settings.restored'))
     } catch {
       setMsg(t('settings.invalidBackup'))
+    }
+  }
+
+  const checkForUpdate = async () => {
+    if (update.ready) return update.apply()
+    setUpdateState('checking')
+    try {
+      if (await update.check()) update.apply()
+      else setUpdateState('latest')
+    } catch {
+      setUpdateState('failed')
     }
   }
 
@@ -124,6 +138,16 @@ export function SettingsPage() {
             <button className="btn" onClick={async () => setPersisted(await requestPersistentStorage())}>{t('common.confirm')}</button>
           </>
         )}
+      </div>
+
+      <div className="card">
+        <h2>{t('settings.app')}</h2>
+        <p className="hint">{t('settings.version', { date: fmtDateTime(__BUILD_TIME__, lang), commit: __COMMIT__ })}</p>
+        <button className="btn btn-primary" onClick={checkForUpdate} disabled={updateState === 'checking'}>
+          ⟳ {t(updateState === 'checking' ? 'settings.checking' : update.ready ? 'settings.installUpdate' : 'settings.checkUpdate')}
+        </button>
+        {updateState === 'latest' && <p>✅ {t('settings.upToDate')}</p>}
+        {updateState === 'failed' && <p>⚠️ {t('settings.updateFailed')}</p>}
       </div>
 
       <div className="card">

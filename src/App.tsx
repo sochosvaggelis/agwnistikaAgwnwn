@@ -1,6 +1,6 @@
 import { HashRouter, NavLink, Outlet, Route, Routes } from 'react-router'
-import { useRegisterSW } from 'virtual:pwa-register/react'
 import { I18nProvider, useI18n } from './i18n'
+import { AppUpdateProvider, useAppUpdate } from './pwa'
 import { LiveGamePage } from './live/LiveGamePage'
 import { GamesPage } from './pages/GamesPage'
 import { NewGamePage } from './pages/NewGamePage'
@@ -16,25 +16,27 @@ import { SettingsPage } from './pages/SettingsPage'
 export default function App() {
   return (
     <I18nProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/games/:id/live" element={<LiveGamePage />} />
-          <Route element={<Layout />}>
-            <Route index element={<GamesPage />} />
-            <Route path="games/new" element={<NewGamePage />} />
-            <Route path="games/:id" element={<GamePage />} />
-            <Route path="stats" element={<StatsPage />} />
-            <Route path="players/:id" element={<PlayerPage />} />
-            <Route path="h2h" element={<HeadToHeadPage />} />
-            <Route path="h2h/:teamId" element={<HeadToHeadPage />} />
-            <Route path="teams" element={<TeamsPage />} />
-            <Route path="teams/:id" element={<TeamPage />} />
-            <Route path="seasons" element={<SeasonsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-        <UpdatePrompt />
-      </HashRouter>
+      <AppUpdateProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="/games/:id/live" element={<LiveGamePage />} />
+            <Route element={<Layout />}>
+              <Route index element={<GamesPage />} />
+              <Route path="games/new" element={<NewGamePage />} />
+              <Route path="games/:id" element={<GamePage />} />
+              <Route path="stats" element={<StatsPage />} />
+              <Route path="players/:id" element={<PlayerPage />} />
+              <Route path="h2h" element={<HeadToHeadPage />} />
+              <Route path="h2h/:teamId" element={<HeadToHeadPage />} />
+              <Route path="teams" element={<TeamsPage />} />
+              <Route path="teams/:id" element={<TeamPage />} />
+              <Route path="seasons" element={<SeasonsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+          </Routes>
+          <UpdatePrompt />
+        </HashRouter>
+      </AppUpdateProvider>
     </I18nProvider>
   )
 }
@@ -59,15 +61,14 @@ function Layout() {
   )
 }
 
-/** New app versions wait for the user, so an update never reloads the page mid-game. */
 function UpdatePrompt() {
   const { t } = useI18n()
-  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
-  if (!needRefresh) return null
+  const { ready, apply } = useAppUpdate()
+  if (!ready) return null
   return (
     <div className="toast">
       {t('pwa.updateReady')}
-      <button className="btn btn-sm btn-primary" onClick={() => updateServiceWorker(true)}>{t('pwa.reload')}</button>
+      <button className="btn btn-sm btn-primary" onClick={apply}>{t('pwa.reload')}</button>
     </div>
   )
 }

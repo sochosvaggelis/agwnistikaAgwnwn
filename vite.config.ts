@@ -5,6 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 // GitHub Pages serves the app from /<repo-name>/; the deploy workflow sets BASE_PATH.
 export default defineConfig(({ command, isPreview }) => ({
   base: command === 'serve' && !isPreview ? '/' : (process.env.BASE_PATH ?? '/agwnistikaAgwnwn/'),
+  // Shown in Settings, to tell which push the tablet is running
+  define: {
+    __BUILD_TIME__: JSON.stringify(Date.now()),
+    __COMMIT__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 7) ?? 'local'),
+  },
   plugins: [
     react(),
     VitePWA({
