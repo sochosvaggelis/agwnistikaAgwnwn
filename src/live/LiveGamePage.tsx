@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import type { Game, GameEvent, Player, Side, Team } from '../db/types'
 import {
-  addPlayer, adjustClock, appendEvents, deleteGroup, getGameEvents, playerLabel, setPeriod, sortPlayers,
+  addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, setPeriod, sortPlayers,
   startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
 import { advance, isEligible, type ActionKey, type Draft, type FlowContext, type Input, type Step } from './flow'
@@ -20,6 +20,12 @@ import './live.css'
 const SIDES: Side[] = ['home', 'away']
 const IDLE: Step = { kind: 'idle' }
 
+/** A step to return to, and the events stored when leaving it */
+interface BackEntry {
+  step: Step
+  ids: number[]
+}
+
 export function LiveGamePage() {
   const { id } = useParams()
   const gameId = Number(id)
@@ -29,6 +35,7 @@ export function LiveGamePage() {
 
   if (game === undefined || events === undefined) return null
   if (!game) return <div className="page"><p>{t('game.notFound')}</p></div>
+  if (game.status === 'finished') return <Navigate to={`/games/${game.id}`} replace />
   return <LiveGame game={game} events={events} />
 }
 
@@ -79,20 +86,47 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     }
   }, [events, stats, game.period])
 
+  /** Steps of the current play, so Back can return to the previous one and remove what it stored */
+  const backStack = useRef<BackEntry[]>([])
+
   const dispatch = (input: Input) => {
-    const r = advance(stepRef.current, input, ctx)
+    const prev = stepRef.current
+    const r = advance(prev, input, ctx)
+    if (r.step === prev && !r.writes.length) return
+    const entry: BackEntry = { step: prev, ids: [] }
+    if (r.step.kind === 'idle') backStack.current = []
+    else if (r.step.kind === 'action') backStack.current = [{ step: IDLE, ids: [] }]
+    else backStack.current.push(entry)
     setStep(r.step)
     if (r.writes.length) {
       const drafts: Draft[] = r.writes
       enqueue(async () => {
-        flowGroup.current = await appendEvents(gameId, drafts, flowGroup.current ?? 'new')
+        const res = await appendEvents(gameId, drafts, flowGroup.current ?? 'new')
+        flowGroup.current = res.group
+        entry.ids.push(...res.ids)
       })
     }
     if (r.step.kind === 'idle') enqueue(async () => { flowGroup.current = null })
   }
 
-  const undo = () => {
+  const goBack = () => {
+    const entry = backStack.current.pop()
+    const target = entry?.step ?? IDLE
+    setStep(target)
+    if (entry) enqueue(async () => { if (entry.ids.length) await deleteEvents(entry.ids) })
+    if (target.kind === 'idle') {
+      backStack.current = []
+      enqueue(async () => { flowGroup.current = null })
+    }
+  }
+
+  const resetFlow = () => {
+    backStack.current = []
     setStep(IDLE)
+  }
+
+  const undo = () => {
+    resetFlow()
     enqueue(async () => {
       flowGroup.current = null
       await undoLastGroup(gameId)
@@ -121,12 +155,19 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   // ---------- modals ----------
   const [modal, setModal] = useState<null | 'log' | 'box' | 'clock' | { addTo: Side }>(null)
 
+  /** Set when we navigate away ourselves, so the back-gesture guard stops intercepting */
+  const leaving = useRef(false)
+  const exitGame = () => {
+    leaving.current = true
+    navigate('/')
+  }
+
   const changePeriod = (delta: 1 | -1) => {
     const p = game.period + delta
     if (p < 1) return
     const msg = delta > 0 ? 'live.confirmNextPeriod' : 'live.confirmPrevPeriod'
     if (!confirm(t(msg, { period: periodLabel(p, lang) }))) return
-    setStep(IDLE)
+    resetFlow()
     enqueue(() => setPeriod(game, p))
   }
 
@@ -135,9 +176,31 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     enqueue(async () => {
       await stopClock(game)
       await updateGame(gameId, { status: 'finished' })
+      leaving.current = true
       navigate(`/games/${gameId}`, { replace: true })
     })
   }
+
+  // Android back gesture: close a window, else go back one step, else ask before leaving the game
+  const onSystemBack = useRef(() => {})
+  useEffect(() => {
+    onSystemBack.current = () => {
+      if (modal) setModal(null)
+      else if (stepRef.current.kind !== 'idle') goBack()
+      else if (confirm(t('live.confirmExit'))) exitGame()
+    }
+  })
+  useEffect(() => {
+    const guard = () => window.history.pushState({ ...window.history.state, liveGuard: true }, '')
+    guard()
+    const onPop = () => {
+      if (leaving.current) return
+      onSystemBack.current()
+      if (!leaving.current) guard()
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   const teamName = (side: Side) => teams?.[side === 'home' ? 0 : 1]?.name ?? ''
   const groups = useMemo(() => groupEvents(events), [events])
@@ -149,7 +212,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   return (
     <div className="live">
       <header className="live-top">
-        <button className="btn btn-ghost" onClick={() => navigate('/')}>‹ {t('live.exit')}</button>
+        <button className="btn btn-ghost" onClick={exitGame}>‹ {t('live.exit')}</button>
         <TeamScore side="home" name={teamName('home')} stats={stats} period={game.period} />
         <div className="live-mid">
           <div className="live-period">
@@ -181,7 +244,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
           onAdd={() => setModal({ addTo: 'home' })}
         />
         <div className="live-center">
-          <CenterPanel step={step} dispatch={dispatch} playerMap={playerMap} groups={groups} ctx={ctx} />
+          <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         </div>
         <RosterColumn
           side="away" players={roster.away} stats={stats} step={step}
@@ -349,16 +412,24 @@ const ACTIONS: ActionKey[][] = [
   ['FOUL'],
 ]
 
-function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
+function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
   step: Step
   dispatch: (i: Input) => void
+  onBack: () => void
   playerMap: Map<number, Player>
   groups: GameEvent[][]
   ctx: FlowContext
 }) {
   const { t, lang } = useI18n()
   const label = (id: number) => playerLabel(playerMap.get(id))
-  const cancel = <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.done')}</button>
+  const foot = (extra?: ReactNode) => (
+    <div className="panel-foot">
+      <button className="btn btn-lg btn-back" onClick={onBack}>‹ {t('live.back')}</button>
+      {extra}
+      <span className="grow" />
+      <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.done')}</button>
+    </div>
+  )
 
   switch (step.kind) {
     case 'idle':
@@ -414,10 +485,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
             side={step.actor.side}
           />
           <Court onTap={(x, y) => dispatch({ t: 'court', x, y })} highlight={step.shot} className="court-input" />
-          <div className="panel-foot">
-            <button className="btn btn-lg" onClick={() => dispatch({ t: 'skip' })}>{t('live.skip')} ›</button>
-            {cancel}
-          </div>
+          {foot(<button className="btn btn-lg" onClick={() => dispatch({ t: 'skip' })}>{t('live.skip')} ›</button>)}
         </div>
       )
 
@@ -432,9 +500,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
               </button>
             ))}
           </div>
-          <div className="panel-foot">
-            <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.cancel')}</button>
-          </div>
+          {foot()}
         </div>
       )
 
@@ -446,7 +512,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
             <button className="btn btn-lg" onClick={() => dispatch({ t: 'coachFoulType', type: 'C' })}>{t('live.coach')}</button>
             <button className="btn btn-lg" onClick={() => dispatch({ t: 'coachFoulType', type: 'B' })}>{t('live.bench')}</button>
           </div>
-          <div className="panel-foot">{cancel}</div>
+          {foot()}
         </div>
       )
 
@@ -458,7 +524,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
             <button className="btn btn-lg" onClick={() => dispatch({ t: 'shotKind', shot: 'FG2' })}>{t('stat.2PT')}</button>
             <button className="btn btn-lg" onClick={() => dispatch({ t: 'shotKind', shot: 'FG3' })}>{t('stat.3PT')}</button>
           </div>
-          <div className="panel-foot">{cancel}</div>
+          {foot()}
         </div>
       )
 
@@ -481,7 +547,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
               </button>
             ))}
           </div>
-          <div className="panel-foot">{cancel}</div>
+          {foot()}
         </div>
       )
 
@@ -497,7 +563,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
             <button className="btn btn-xl btn-made" onClick={() => dispatch({ t: 'ftResult', made: true })}>✓ {t('live.made')}</button>
             <button className="btn btn-xl btn-miss" onClick={() => dispatch({ t: 'ftResult', made: false })}>✗ {t('live.missed')}</button>
           </div>
-          <div className="panel-foot">{cancel}</div>
+          {foot()}
         </div>
       )
 
@@ -517,7 +583,7 @@ function CenterPanel({ step, dispatch, playerMap, groups, ctx }: {
           {step.purpose === 'fouled' && ctx.teamFouls[step.actor.side] + 1 > TEAM_FOUL_PENALTY && (
             <p className="panel-note">{t('live.penalty')}</p>
           )}
-          <div className="panel-foot">{cancel}</div>
+          {foot()}
         </div>
       )
     }

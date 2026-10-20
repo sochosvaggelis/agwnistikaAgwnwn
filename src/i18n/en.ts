@@ -94,6 +94,8 @@ export const en = {
 
   'live.tapPlayer': 'Tap a player',
   'live.cancel': 'Cancel',
+  'live.back': 'Back',
+  'live.confirmExit': 'Leave the game screen? Everything is saved and you can continue later.',
   'live.done': 'Done',
   'live.skip': 'Skip',
   'live.nobody': 'Nobody',

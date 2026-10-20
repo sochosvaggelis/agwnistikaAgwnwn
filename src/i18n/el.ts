@@ -96,6 +96,8 @@ export const el: Record<TKey, string> = {
 
   'live.tapPlayer': 'Επιλέξτε παίκτη',
   'live.cancel': 'Άκυρο',
+  'live.back': 'Πίσω',
+  'live.confirmExit': 'Έξοδος από την οθόνη του αγώνα; Όλα έχουν αποθηκευτεί και μπορείτε να συνεχίσετε αργότερα.',
   'live.done': 'Τέλος',
   'live.skip': 'Παράλειψη',
   'live.nobody': 'Κανείς',

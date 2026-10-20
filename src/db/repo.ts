@@ -140,24 +140,24 @@ export async function getGameEvents(gameId: number): Promise<GameEvent[]> {
 
 /**
  * Store events produced by one step of the entry flow.
- * group 'new' starts a new undo group; returns the group used.
+ * group 'new' starts a new undo group; returns the group used and the new event ids.
  */
-export async function appendEvents(gameId: number, drafts: Draft[], group: number | 'new'): Promise<number> {
+export async function appendEvents(gameId: number, drafts: Draft[], group: number | 'new'): Promise<{ group: number; ids: number[] }> {
   return db.transaction('rw', db.games, db.events, async () => {
     const game = await db.games.get(gameId)
     if (!game) throw new Error('game not found')
     const g = group === 'new' ? game.lastGroup + 1 : group
-    if (drafts.length === 0) return g
+    if (drafts.length === 0) return { group: g, ids: [] }
     const last = await db.events.where('[gameId+seq]').between([gameId, Dexie.minKey], [gameId, Dexie.maxKey]).last()
     let seq = last?.seq ?? 0
     const t = now()
     const clockMs = game.clockEnabled ? currentClockMs(game, t) : undefined
-    await db.events.bulkAdd(drafts.map(d => ({
+    const ids = await db.events.bulkAdd(drafts.map(d => ({
       ...d, gameId, seq: ++seq, group: g, period: game.period, createdAt: t,
       ...(clockMs != null ? { clockMs } : {}),
-    })))
+    })), { allKeys: true })
     await db.games.update(gameId, { lastGroup: Math.max(game.lastGroup, g), updatedAt: t })
-    return g
+    return { group: g, ids: ids as number[] }
   })
 }
 
@@ -170,6 +170,10 @@ export async function undoLastGroup(gameId: number): Promise<GameEvent[]> {
     await db.events.bulkDelete(removed.map(e => e.id!))
     return removed
   })
+}
+
+export async function deleteEvents(ids: number[]) {
+  await db.events.bulkDelete(ids)
 }
 
 export async function deleteEvent(id: number) {

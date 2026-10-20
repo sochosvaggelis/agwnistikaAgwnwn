@@ -191,8 +191,9 @@
 .panel-subtitle { color: var(--muted); font-size: 0.95rem; }
 .panel-hint { color: var(--muted); font-size: 1.2rem; text-align: center; margin: 8px 0; }
 .panel-note { color: var(--danger); font-weight: 700; text-align: center; margin: 0; }
-.panel-foot { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; }
-.panel-pick .choice-grid { margin-top: auto; }
+.panel-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; }
+.panel-foot .grow { flex: 1; }
+.btn-back { min-width: 120px; }
 
 .action-grid {
   display: grid;
