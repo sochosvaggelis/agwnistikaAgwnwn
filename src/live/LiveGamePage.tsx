@@ -387,16 +387,20 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   )
 }
 
+/** Boxes for the team fouls of a period, like a scoreboard, with the count beside them for fouls past the boxes */
+const TEAM_FOUL_BOXES = 5
+
 function TeamScore({ side, stats, period }: { side: Side; stats: GameStats; period: number }) {
   const { t } = useI18n()
   const team = stats.teams[side]
   const fouls = teamFoulsInPeriod(team, period)
-  const penalty = fouls >= TEAM_FOUL_PENALTY
+  const label = `${t('live.teamFouls')}: ${fouls}`
   return (
     <div className={`team-score side-${side}`}>
       <span className="score">{team.score}</span>
-      <span className={`team-fouls${penalty ? ' penalty' : ''}`} title={t('live.teamFouls')}>
-        {t('stat.PF')} {fouls}{penalty ? ` · ${t('live.penalty')}` : ''}
+      <span className="team-fouls" title={label} aria-label={label}>
+        {Array.from({ length: TEAM_FOUL_BOXES }, (_, i) => <i key={i} className={`foul-box${i < fouls ? ' on' : ''}`} />)}
+        <b className="foul-count">{fouls}</b>
       </span>
     </div>
   )
