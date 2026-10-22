@@ -14,7 +14,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Game clock | Optional per game (start/stop; events get game time when on) |
 | Substitutions | Not tracked → no minutes played, no +/- |
 | Rules | FIBA: 4×10, OT 5 min, foul-out at 5, team-foul penalty from the 5th foul in a quarter |
-| Shot entry | Court spot → player → action; the half court is always shown in the live screen's center column (changed 2026-10-21) |
+| Shot entry | Court spot → player → action; each team has its own half court, always shown above its roster on the live screen with the team's shots so far (made/missed, like the game report) (changed 2026-10-22) |
 | Chaining | Skippable follow-up prompts (see Input flow) |
 | Opponents | Saved reusable teams, or create one at game time and keep it |
 | Fouls | Type: personal / shooting / offensive / technical / unsportsmanlike + fouled player |
@@ -29,7 +29,9 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 
 ## Input flow
 
-1. Tap the spot on the half court (always visible above the center panel), then the player: home roster on the left, away roster on the right. Tapping the court again moves the spot.
+1. Tap the spot on a team's half court, then one of that team's players: home court and roster on the left, away on the right. Tapping the same court again moves the spot; tapping the other team's court starts the play over for that team.
+   - A spot is for the player whose court it was tapped on: switching to a player of the other team drops it, and a field goal without a spot asks for one on the shooter's court only.
+   - The action buttons are always shown until a play is under way, so the action can also come first: action, spot and player in any order (changed 2026-10-22). The chosen action is filled in; tapping another one replaces it.
    - Shortcut: tap a player first to skip the spot (e.g. free throws).
 2. Tap an action: `2PT✓ 2PT✗ 3PT✓ 3PT✗ FT✓ FT✗ OREB DREB AST STL BLK TOV FOUL`
    - With a spot, the 2PT or 3PT buttons for that zone are outlined.

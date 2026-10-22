@@ -7,8 +7,10 @@ import {
   addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, setPeriod, sortPlayers,
   startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
-import { acceptsSpot, advance, isEligible, type ActionKey, type Draft, type FlowContext, type Input, type Step } from './flow'
-import { computeGameStats, foulCounts, teamFoulsInPeriod, type GameStats, type StatLine } from '../stats/compute'
+import {
+  acceptsSpot, advance, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
+} from './flow'
+import { computeGameStats, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine } from '../stats/compute'
 import {
   currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, periodLabel, TEAM_FOUL_PENALTY,
 } from '../stats/rules'
@@ -61,6 +63,11 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   }), [game.roster, playerMap])
 
   const stats = useMemo(() => computeGameStats(events, game), [events, game])
+  // Each team's court shows its shots so far, like the game report
+  const shots = useMemo(() => ({
+    home: shotsOf(events, e => e.side === 'home'),
+    away: shotsOf(events, e => e.side === 'away'),
+  }), [events])
 
   // ---------- entry flow ----------
   const [step, setStepState] = useState<Step>(IDLE)
@@ -101,7 +108,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     else if (r.step.kind === 'player') backStack.current = [{ step: IDLE, ids: [] }]
     else if (r.step.kind === 'action') {
       backStack.current = [{ step: IDLE, ids: [] }]
-      if (r.step.at) backStack.current.push({ step: { kind: 'player', at: r.step.at }, ids: [] })
+      if (r.step.at) backStack.current.push({ step: { kind: 'player', side: r.step.actor.side, at: r.step.at }, ids: [] })
     } else backStack.current.push(entry)
     setStep(r.step)
     if (r.writes.length) {
@@ -244,23 +251,16 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
 
       <div className="live-body">
         <RosterColumn
-          side="home" name={teamName('home')} players={roster.home} stats={stats} step={step}
+          side="home" name={teamName('home')} players={roster.home} stats={stats} shots={shots.home} step={step}
+          onCourt={(x, y) => dispatch({ t: 'court', side: 'home', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'home', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'home' })}
           onAdd={() => setModal({ addTo: 'home' })}
         />
-        <div className="live-center">
-          <div className={`live-court${acceptsSpot(step) ? '' : ' off'}`}>
-            <Court
-              onTap={acceptsSpot(step) ? (x, y) => dispatch({ t: 'court', x, y }) : undefined}
-              highlight={step.kind === 'court' ? step.shot : undefined}
-              marker={'at' in step ? step.at : undefined}
-            />
-          </div>
-          <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
-        </div>
+        <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         <RosterColumn
-          side="away" name={teamName('away')} players={roster.away} stats={stats} step={step}
+          side="away" name={teamName('away')} players={roster.away} stats={stats} shots={shots.away} step={step}
+          onCourt={(x, y) => dispatch({ t: 'court', side: 'away', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'away', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'away' })}
           onAdd={() => setModal({ addTo: 'away' })}
@@ -350,21 +350,33 @@ interface RosterProps {
   name: string
   players: Player[]
   stats: GameStats
+  shots: Shot[]
   step: Step
+  onCourt: (x: number, y: number) => void
   onPlayer: (id: number) => void
   onCoach: () => void
   onAdd: () => void
 }
 
-function RosterColumn({ side, name, players, stats, step, onPlayer, onCoach, onAdd }: RosterProps) {
+function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlayer, onCoach, onAdd }: RosterProps) {
   const { t } = useI18n()
   const picking = step.kind === 'pick' || step.kind === 'player'
   const selected = step.kind === 'action' || step.kind === 'foulType' ? step.actor : undefined
   const coach = stats.teams[side].coachFouls
+  const courtOn = acceptsSpot(step, side)
+  const spot = markedSpot(step)
 
   return (
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
       <div className="roster-name">{name}</div>
+      <div className={`live-court${courtOn ? '' : ' off'}`}>
+        <Court
+          shots={shots}
+          onTap={courtOn ? onCourt : undefined}
+          highlight={step.kind === 'court' && step.actor.side === side ? step.shot : undefined}
+          marker={spot?.side === side ? spot.at : undefined}
+        />
+      </div>
       <div className="roster-grid">
         {players.map(p => {
           const line = stats.players.get(p.id!)
@@ -446,59 +458,60 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
   )
 
   switch (step.kind) {
+    // Until a play is under way the action buttons stay up, so the action can come before or after the player
     case 'idle':
-      return (
-        <div className="panel panel-idle">
-          <p className="panel-hint">{t('live.tapCourt')}<small>{t('live.orTapPlayer')}</small></p>
-          <h4>{t('live.recent')}</h4>
-          <ul className="recent-list">
-            {groups.slice(0, 12).map(g => (
-              <li key={g[0].group} className={`side-${g[0].side}`}>
-                <span className="log-period">{periodLabel(g[0].period, lang)}</span>
-                {g.map(e => {
-                  const d = describeShort(e, playerMap, t)
-                  return (
-                    <span key={e.id} className={`ev-chip side-${e.side}`}>
-                      <b>{d.who}</b> {d.what}
-                    </span>
-                  )
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )
-
     case 'player':
-      return (
-        <div className="panel">
-          <PanelHead title={t('live.tapPlayer')} subtitle={t('live.moveSpot')} />
-          <div className="panel-foot">
-            <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.cancel')}</button>
-          </div>
-        </div>
-      )
-
     case 'action': {
+      const at = step.kind === 'idle' ? undefined : step.at
       // The spot already tells a 2 from a 3, so point out those shot buttons
-      const zone = step.at && (isThreeByLocation(step.at.x, step.at.y) ? 'FG3' : 'FG2')
+      const zone = at && (isThreeByLocation(at.x, at.y) ? 'FG3' : 'FG2')
+      const chosen = step.kind === 'player' ? step.action : undefined
       return (
-        <div className="panel">
-          <PanelHead title={label(step.actor.playerId)} side={step.actor.side} />
+        <div className={`panel${step.kind === 'idle' ? ' panel-idle' : ''}`}>
+          {step.kind === 'idle' && <p className="panel-hint">{t('live.tapCourt')}<small>{t('live.orTapPlayer')}</small></p>}
+          {step.kind === 'player' && (
+            <PanelHead
+              title={chosen ? t(`act.${chosen}`) : t('live.tapPlayer')}
+              subtitle={chosen ? t('live.tapPlayer') : t('live.moveSpot')}
+              side={step.side}
+            />
+          )}
+          {step.kind === 'action' && <PanelHead title={label(step.actor.playerId)} side={step.actor.side} />}
           <div className="action-grid">
             {ACTIONS.flat().map(a => (
               <button
                 key={a}
-                className={`btn action-btn act-${a.replace(/[+-]/, m => (m === '+' ? 'made' : 'miss'))}${zone && a.startsWith(zone) ? ' suggested' : ''}`}
+                className={`btn action-btn act-${a.replace(/[+-]/, m => (m === '+' ? 'made' : 'miss'))}${zone && a.startsWith(zone) ? ' suggested' : ''}${a === chosen ? ' chosen' : ''}`}
                 onClick={() => dispatch({ t: 'action', action: a })}
               >
                 {t(`act.${a}`)}
               </button>
             ))}
           </div>
-          <div className="panel-foot">
-            <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.cancel')}</button>
-          </div>
+          {step.kind === 'idle' ? (
+            <>
+              <h4>{t('live.recent')}</h4>
+              <ul className="recent-list">
+                {groups.slice(0, 12).map(g => (
+                  <li key={g[0].group} className={`side-${g[0].side}`}>
+                    <span className="log-period">{periodLabel(g[0].period, lang)}</span>
+                    {g.map(e => {
+                      const d = describeShort(e, playerMap, t)
+                      return (
+                        <span key={e.id} className={`ev-chip side-${e.side}`}>
+                          <b>{d.who}</b> {d.what}
+                        </span>
+                      )
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <div className="panel-foot">
+              <button className="btn btn-ghost" onClick={() => dispatch({ t: 'cancel' })}>✕ {t('live.cancel')}</button>
+            </div>
+          )}
         </div>
       )
     }
@@ -510,7 +523,10 @@ function CenterPanel({ step, dispatch, onBack, playerMap, groups, ctx }: {
             title={`${label(step.actor.playerId)} — ${t(`ev.${step.shot}.${step.made ? 'made' : 'missed'}`)}`}
             side={step.actor.side}
           />
-          <p className="panel-hint">↑ {t('live.shotLocation')}</p>
+          {/* Points at the shooter's court */}
+          <p className="panel-hint">
+            {step.actor.side === 'home' ? `← ${t('live.shotLocation')}` : `${t('live.shotLocation')} →`}
+          </p>
           {foot(<button className="btn btn-lg" onClick={() => dispatch({ t: 'skip' })}>{t('live.skip')} ›</button>)}
         </div>
       )

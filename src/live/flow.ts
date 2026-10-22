@@ -31,7 +31,8 @@ export interface Spot {
 
 export type Step =
   | { kind: 'idle' }
-  | { kind: 'player'; at: Spot } // the court was tapped, now choose who
+  // A court or an action was tapped, now choose who. side is the team whose court was tapped, set together with at.
+  | { kind: 'player'; side?: Side; at?: Spot; action?: ActionKey }
   | { kind: 'action'; actor: PlayerRef; at?: Spot }
   | { kind: 'court'; actor: PlayerRef; shot: 'FG2' | 'FG3'; made: boolean }
   | { kind: 'foulType'; actor: PlayerRef; at?: Spot }
@@ -54,7 +55,7 @@ export type PickStep =
 export type Input =
   | { t: 'player'; side: Side; playerId: number }
   | { t: 'action'; action: ActionKey }
-  | { t: 'court'; x: number; y: number }
+  | { t: 'court'; side: Side; x: number; y: number }
   | { t: 'skip' }
   | { t: 'blocked' }
   | { t: 'foulType'; foulType: FoulType }
@@ -96,16 +97,25 @@ function spotOf(input: { x: number; y: number }): Spot {
   return { x: round2(input.x), y: round2(input.y) }
 }
 
-/** Whether a court tap means something in the current step. */
-export function acceptsSpot(step: Step): boolean {
-  return step.kind === 'idle' || step.kind === 'player' || step.kind === 'action' || step.kind === 'court'
+/** Whether a tap on a team's court means something in the current step. */
+export function acceptsSpot(step: Step, side: Side): boolean {
+  if (step.kind === 'court') return step.actor.side === side
+  return step.kind === 'idle' || step.kind === 'player' || step.kind === 'action'
+}
+
+/** The spot of the play being entered, and the team whose court shows it. */
+export function markedSpot(step: Step): { side: Side; at: Spot } | undefined {
+  if (!('at' in step) || !step.at) return undefined
+  const side = step.kind === 'player' ? step.side : step.actor.side
+  return side && { side, at: step.at }
 }
 
 /** Which players may be tapped in the current step. */
 export function eligibility(step: Step): { sides: Side[]; exclude?: number } {
   switch (step.kind) {
-    case 'idle':
     case 'player':
+      return { sides: step.side ? [step.side] : ['home', 'away'] }
+    case 'idle':
     case 'action':
       return { sides: ['home', 'away'] }
     case 'pick':
@@ -141,26 +151,37 @@ export function advance(step: Step, input: Input, ctx: FlowContext): Result {
   switch (step.kind) {
     case 'idle':
     case 'player': {
-      const at = step.kind === 'player' ? step.at : undefined
-      if (input.t === 'court') return go({ kind: 'player', at: spotOf(input) })
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at })
+      // The spot and the action can come in any order before the player
+      const sofar: { side?: Side; at?: Spot; action?: ActionKey } = step.kind === 'player' ? step : {}
+      if (input.t === 'court') return go({ kind: 'player', ...sofar, side: input.side, at: spotOf(input) })
+      if (input.t === 'action') return go({ kind: 'player', ...sofar, action: input.action })
+      if (input.t === 'player' && isEligible(step, input.side, input.playerId)) {
+        const actor = { side: input.side, playerId: input.playerId }
+        if (sofar.action) return onAction(actor, sofar.action, sofar.at)
+        return go({ kind: 'action', actor, at: sofar.at })
+      }
       if (input.t === 'coachFoul') return go({ kind: 'coachFoulType', side: input.side })
       return go(step)
     }
 
     case 'action':
-      if (input.t === 'court') return go({ ...step, at: spotOf(input) })
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at: step.at })
+      if (input.t === 'court') {
+        // The other team's court starts the play over for that team
+        if (input.side !== step.actor.side) return go({ kind: 'player', side: input.side, at: spotOf(input) })
+        return go({ ...step, at: spotOf(input) })
+      }
+      if (input.t === 'player') return switchActor(step, input)
       if (input.t === 'coachFoul') return go({ kind: 'coachFoulType', side: input.side })
       if (input.t === 'action') return onAction(step.actor, input.action, step.at)
       return go(step)
 
     case 'court':
-      if (input.t !== 'court' && input.t !== 'skip') return go(step)
-      return shotTaken(step.actor, step.shot, step.made, input.t === 'court' ? spotOf(input) : undefined)
+      if (input.t === 'skip') return shotTaken(step.actor, step.shot, step.made)
+      if (input.t !== 'court' || input.side !== step.actor.side) return go(step)
+      return shotTaken(step.actor, step.shot, step.made, spotOf(input))
 
     case 'foulType':
-      if (input.t === 'player') return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at: step.at })
+      if (input.t === 'player') return switchActor(step, input)
       if (input.t !== 'foulType') return go(step)
       return go({ kind: 'pick', purpose: 'fouled', actor: step.actor, foulType: input.foulType, at: step.at })
 
@@ -194,6 +215,12 @@ export function advance(step: Step, input: Input, ctx: FlowContext): Result {
     case 'pick':
       return onPick(step, input, ctx)
   }
+}
+
+/** Choose another player for the play. The spot was tapped on the actor's court, so it only stays within that team. */
+function switchActor(step: { actor: PlayerRef; at?: Spot }, input: { side: Side; playerId: number }): Result {
+  const at = input.side === step.actor.side ? step.at : undefined
+  return go({ kind: 'action', actor: { side: input.side, playerId: input.playerId }, at })
 }
 
 /** A field goal; without a spot yet, ask for one first. */
