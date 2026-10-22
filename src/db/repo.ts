@@ -200,6 +200,26 @@ export async function appendEvents(
   })
 }
 
+/**
+ * Store events as one group at the start of the game, ahead of everything already entered:
+ * a starting five picked after the first plays still opens the log and counts from the tip-off.
+ */
+export async function prependEvents(gameId: number, drafts: Draft[]): Promise<{ group: number; ids: number[] }> {
+  return db.transaction('rw', db.games, db.events, async () => {
+    const game = await db.games.get(gameId)
+    if (!game) throw new Error('game not found')
+    const first = await db.events.where('[gameId+seq]').between([gameId, Dexie.minKey], [gameId, Dexie.maxKey]).first()
+    const start = first ? first.seq - drafts.length : 1
+    const g = game.lastGroup + 1
+    const t = now()
+    const ids = await db.events.bulkAdd(drafts.map((d, i) => ({
+      ...d, gameId, seq: start + i, group: g, period: 1, clockMs: periodLengthMs(game, 1), createdAt: t,
+    })), { allKeys: true })
+    await db.games.update(gameId, { lastGroup: g, updatedAt: t })
+    return { group: g, ids: ids as number[] }
+  })
+}
+
 /** Remove the most recent group of events. Returns the removed events. */
 export async function undoLastGroup(gameId: number): Promise<GameEvent[]> {
   return db.transaction('rw', db.events, async () => {

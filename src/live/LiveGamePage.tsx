@@ -4,8 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import type { Game, GameEvent, Player, Side, Team } from '../db/types'
 import {
-  addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, setPeriod, sortPlayers,
-  startClock, stopClock, undoLastGroup, updateGame,
+  addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, prependEvents, setPeriod,
+  sortPlayers, startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
 import {
   acceptsSpot, advance, chosenPlayer, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
@@ -189,7 +189,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     setModal(null)
   }
 
-  /** Store a substitution, or a starting five (nobody going out), as one undo group */
+  /** Store a substitution as one undo group; a starting five goes to the start of the game, however late it is picked */
   const substitute = (side: Side, ins: number[], outs: number[], clockMs: number | undefined) => {
     setStartersAsked(true)
     resetFlow()
@@ -197,9 +197,11 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
       ...outs.map(playerId => ({ side, playerId, type: 'SUB_OUT' as const })),
       ...ins.map(playerId => ({ side, playerId, type: 'SUB_IN' as const })),
     ]
+    const starting = !lineup[side]
     enqueue(async () => {
       flowGroup.current = null
-      await appendEvents(gameId, drafts, 'new', { clockMs })
+      if (starting) await prependEvents(gameId, drafts)
+      else await appendEvents(gameId, drafts, 'new', { clockMs })
     })
     // After one team's starting five, go on to the other's
     const other = opposite(side)
@@ -816,13 +818,14 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
     game.clockEnabled ? formatClock(currentClockMs(game))
       : events.some(e => e.period === game.period) ? '' : formatClock(periodMs))
 
+  // A starting five always goes in at the tip-off, so only substitutions take a time
+  const starting = lineup.length === 0
   const clockMs = time.trim() ? parseClock(time) : undefined
-  const badTime = clockMs === null || (clockMs != null && clockMs > periodMs)
+  const badTime = !starting && (clockMs === null || (clockMs != null && clockMs > periodMs))
   const fouledOut = (id: number) => {
     const l = stats.players.get(id)
     return !!l && isPlayerDisqualified(foulCounts(l))
   }
-  const starting = lineup.length === 0
   const onCourt = players.filter(p => lineup.includes(p.id!))
   const bench = players.filter(p => !lineup.includes(p.id!))
   const count = lineup.length - outs.length + ins.length
@@ -862,7 +865,10 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
       )}
       <h3 className="sub-head">{t(starting ? 'live.pickStarters' : 'live.benchIn')}</h3>
       <div className="sub-chips">{bench.map(p => chip(p, ins.includes(p.id!), () => toggle(ins, setIns, p.id!), 'in'))}</div>
-      <div className="form-row sub-time">
+      {starting && events.length > 0 && (
+        <p className="hint">{t('live.startersNote', { time: `${periodLabel(1, lang)} ${formatClock(periodLengthMs(game, 1))}` })}</p>
+      )}
+      {!starting && <div className="form-row sub-time">
         <label>
           {t('live.subTime', { period: periodLabel(game.period, lang) })}
           <input inputMode="numeric" value={time} onChange={e => setTime(e.target.value)} placeholder="5:32" />
@@ -872,7 +878,7 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
             <>{clockMs != null && <b>= {formatClock(clockMs)} · </b>}{t('live.subTimeHint')}</>
           )}
         </p>
-      </div>
+      </div>}
     </Modal>
   )
 }

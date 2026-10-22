@@ -150,6 +150,7 @@ export const en = {
   'live.onCourtOut': 'On court: tap who goes out',
   'live.benchIn': 'Bench: tap who comes in',
   'live.pickStarters': 'Tap the players who start',
+  'live.startersNote': 'They go in at the start of the game ({time}), ahead of the plays already entered. Enter any substitutions made since then with the Substitution button.',
   'live.lineupCount': 'On court: {n} of 5',
   'live.subTime': 'Time left in {period}',
   'live.subTimeHint': 'Optional, for minutes played. Digits are enough: 532 = 5:32',
