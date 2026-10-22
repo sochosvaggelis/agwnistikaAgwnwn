@@ -84,6 +84,9 @@ export type EventType =
   | 'TOV'
   | 'FOUL'
   | 'COACH_FOUL'
+  // The player enters or leaves the court; the starting five are SUB_IN events too
+  | 'SUB_IN'
+  | 'SUB_OUT'
 
 export interface GameEvent {
   id?: number

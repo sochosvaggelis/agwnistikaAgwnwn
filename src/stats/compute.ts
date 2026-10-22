@@ -1,5 +1,6 @@
 import type { FoulType, Game, GameEvent, Side } from '../db/types'
 import { opposite, shotZone, teamFoulPeriod, type FoulCounts, type Zone } from './rules'
+import { lineups, minutesPlayed } from './lineup'
 
 export interface StatLine {
   pts: number
@@ -22,6 +23,10 @@ export interface StatLine {
   /** Fouls drawn */
   fd: number
   fouls: Record<FoulType, number>
+  /** Time on court in ms, over the games where it is known */
+  ms: number
+  /** Games where the time on court is known, for averages */
+  msGames: number
 }
 
 export function emptyLine(): StatLine {
@@ -29,6 +34,7 @@ export function emptyLine(): StatLine {
     pts: 0, fg2m: 0, fg2a: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0,
     oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, blka: 0, tov: 0, pf: 0, fd: 0,
     fouls: { P: 0, S: 0, O: 0, T: 0, U: 0, D: 0 },
+    ms: 0, msGames: 0,
   }
 }
 
@@ -99,7 +105,8 @@ const SHOT_KEYS = {
   FT: [1, 'fta', 'ftm'],
 } as const
 
-export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'>): GameStats {
+/** With the whole game, players of a team that tracks its lineup also get their time on court. */
+export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'> | Game): GameStats {
   const players = new Map<number, StatLine>()
   const playerSide = new Map<number, Side>()
   const teams: Record<Side, TeamGameStats> = { home: emptyTeam(), away: emptyTeam() }
@@ -165,7 +172,26 @@ export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'
     }
   }
 
+  if (game && 'status' in game) {
+    const tracked = lineups(events)
+    const minutes = minutesPlayed(events, game)
+    for (const [id, l] of players) {
+      if (!tracked[playerSide.get(id)!]) continue
+      // A player of the team who never entered played no time
+      const ms = minutes.has(id) ? minutes.get(id)! : 0
+      if (ms != null) {
+        l.ms = ms
+        l.msGames = 1
+      }
+    }
+  }
+
   for (const [id, l] of players) addLines(teams[playerSide.get(id)!].totals, l)
+  // A team's minutes add up to five times the game's length, so they aren't shown
+  for (const side of ['home', 'away'] as Side[]) {
+    teams[side].totals.ms = 0
+    teams[side].totals.msGames = 0
+  }
   return { players, playerSide, teams }
 }
 

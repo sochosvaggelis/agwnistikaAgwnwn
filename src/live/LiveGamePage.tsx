@@ -14,8 +14,10 @@ import {
   computeGameStats, fga, fgm, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine,
 } from '../stats/compute'
 import {
-  currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, periodLabel, TEAM_FOUL_PENALTY,
+  currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, opposite, parseClock,
+  periodLabel, periodLengthMs, TEAM_FOUL_PENALTY,
 } from '../stats/rules'
+import { lineups } from '../stats/lineup'
 import { useI18n } from '../i18n'
 import { Court } from '../components/Court'
 import { ZoneLayer } from '../components/ZoneLayer'
@@ -67,6 +69,8 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   }), [game.roster, playerMap])
 
   const stats = useMemo(() => computeGameStats(events, game), [events, game])
+  // Who is on the court for each team; null until the team's starting five are picked
+  const lineup = useMemo(() => lineups(events), [events])
 
   // ---------- entry flow ----------
   const [step, setStepState] = useState<Step>(IDLE)
@@ -174,7 +178,33 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   useWakeLock()
 
   // ---------- modals ----------
-  const [modal, setModal] = useState<null | 'log' | 'box' | 'clock' | { addTo: Side }>(null)
+  type ModalState = null | 'log' | 'box' | 'clock' | { sub: Side } | { addTo: Side; thenSub?: boolean }
+  const [opened, setModal] = useState<ModalState>(null)
+  // A new game starts by picking the starting fives, until that window is saved or closed
+  const [startersAsked, setStartersAsked] = useState(false)
+  const startersSide = !startersAsked && players && !events.length ? SIDES.find(s => roster[s].length >= 5) : undefined
+  const modal: ModalState = opened ?? (startersSide ? { sub: startersSide } : null)
+  const closeModal = () => {
+    setStartersAsked(true)
+    setModal(null)
+  }
+
+  /** Store a substitution, or a starting five (nobody going out), as one undo group */
+  const substitute = (side: Side, ins: number[], outs: number[], clockMs: number | undefined) => {
+    setStartersAsked(true)
+    resetFlow()
+    const drafts: Draft[] = [
+      ...outs.map(playerId => ({ side, playerId, type: 'SUB_OUT' as const })),
+      ...ins.map(playerId => ({ side, playerId, type: 'SUB_IN' as const })),
+    ]
+    enqueue(async () => {
+      flowGroup.current = null
+      await appendEvents(gameId, drafts, 'new', { clockMs })
+    })
+    // After one team's starting five, go on to the other's
+    const other = opposite(side)
+    setModal(!lineup[side] && !lineup[other] && roster[other].length >= 5 ? { sub: other } : null)
+  }
 
   /** Set when we navigate away ourselves, so the back-gesture guard stops intercepting */
   const leaving = useRef(false)
@@ -206,7 +236,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   const onSystemBack = useRef(() => {})
   useEffect(() => {
     onSystemBack.current = () => {
-      if (modal) setModal(null)
+      if (modal) closeModal()
       else if (stepRef.current.kind !== 'idle') goBack()
       else if (confirm(t('live.confirmExit'))) exitGame()
     }
@@ -259,19 +289,21 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
 
       <div className="live-body">
         <RosterColumn
-          side="home" name={teamName('home')} players={roster.home} stats={stats} shots={shots.home} step={step}
+          side="home" name={teamName('home')} players={roster.home} lineup={lineup.home} stats={stats} shots={shots.home} step={step}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'home', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'home', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'home' })}
           onAdd={() => setModal({ addTo: 'home' })}
+          onSub={() => setModal({ sub: 'home' })}
         />
         <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         <RosterColumn
-          side="away" name={teamName('away')} players={roster.away} stats={stats} shots={shots.away} step={step}
+          side="away" name={teamName('away')} players={roster.away} lineup={lineup.away} stats={stats} shots={shots.away} step={step}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'away', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'away', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'away' })}
           onAdd={() => setModal({ addTo: 'away' })}
+          onSub={() => setModal({ sub: 'away' })}
         />
       </div>
 
@@ -318,10 +350,24 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
         </Modal>
       )}
       {modal === 'clock' && <ClockModal game={game} onClose={() => setModal(null)} enqueue={enqueue} />}
-      {modal && typeof modal === 'object' && (
+      {modal && typeof modal === 'object' && 'sub' in modal && (
+        <SubModal
+          key={modal.sub}
+          game={game}
+          events={events}
+          team={teams?.[modal.sub === 'home' ? 0 : 1]}
+          players={roster[modal.sub]}
+          lineup={lineup[modal.sub] ?? []}
+          stats={stats}
+          onSave={(ins, outs, ms) => substitute(modal.sub, ins, outs, ms)}
+          onAddPlayer={() => setModal({ addTo: modal.sub, thenSub: true })}
+          onClose={closeModal}
+        />
+      )}
+      {modal && typeof modal === 'object' && 'addTo' in modal && (
         <AddPlayerModal
           team={teams?.[modal.addTo === 'home' ? 0 : 1]}
-          onClose={() => setModal(null)}
+          onClose={() => setModal(modal.thenSub ? { sub: modal.addTo } : null)}
           onAdd={(number, name) => {
             const side = modal.addTo
             const teamId = side === 'home' ? game.homeTeamId : game.awayTeamId
@@ -330,7 +376,8 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
               const fresh = await db.games.get(gameId)
               if (fresh) await updateGame(gameId, { roster: { ...fresh.roster, [side]: [...fresh.roster[side], pid] } })
             })
-            setModal(null)
+            // Back to the substitution the player was added from, where they now sit on the bench
+            setModal(modal.thenSub ? { sub: side } : null)
           }}
         />
       )}
@@ -357,6 +404,8 @@ interface RosterProps {
   side: Side
   name: string
   players: Player[]
+  /** Players on the court, or null while the team has no starting five */
+  lineup: number[] | null
   stats: GameStats
   shots: Shot[]
   step: Step
@@ -364,10 +413,17 @@ interface RosterProps {
   onPlayer: (id: number) => void
   onCoach: () => void
   onAdd: () => void
+  onSub: () => void
 }
 
-function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlayer, onCoach, onAdd }: RosterProps) {
+function RosterColumn({ side, name, players: roster, lineup, stats, shots, step, onCourt, onPlayer, onCoach, onAdd, onSub }: RosterProps) {
   const { t } = useI18n()
+  // Once the team has a lineup, only the players on the court are shown
+  const players = lineup ? roster.filter(p => lineup.includes(p.id!)) : roster
+  const fouledOutOnCourt = !!lineup && players.some(p => {
+    const l = stats.players.get(p.id!)
+    return !!l && isPlayerDisqualified(foulCounts(l))
+  })
   const picking = step.kind === 'pick' || step.kind === 'player'
   const chosen = chosenPlayer(step)
   const selected = chosen?.side === side ? players.find(p => p.id === chosen.playerId) : undefined
@@ -403,7 +459,8 @@ function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlay
           {t('shots.viewHeat')}
         </button>
       </div>
-      <div className="roster-grid">
+      <div className={`roster-grid${lineup ? ' on-court' : ''}`}>
+        {!lineup && <button className="player-btn player-sub" onClick={onSub}>{t('live.startingFive')}</button>}
         {players.map(p => {
           const line = stats.players.get(p.id!)
           const eligible = !picking || isEligible(step, side, p.id!)
@@ -420,7 +477,12 @@ function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlay
             />
           )
         })}
-        <button className="player-btn player-add" onClick={onAdd} aria-label={t('teams.addPlayer')}>＋</button>
+        {lineup ? (
+          // Stands out while a fouled-out player is still on the court
+          <button className={`player-btn player-sub${fouledOutOnCourt ? ' attention' : ''}`} onClick={onSub}>⇄ {t('live.sub')}</button>
+        ) : (
+          <button className="player-btn player-add" onClick={onAdd} aria-label={t('teams.addPlayer')}>＋</button>
+        )}
       </div>
       <button
         className={`btn btn-sm btn-coach${isCoachDisqualified(coach) ? ' dq' : ''}`}
@@ -728,6 +790,88 @@ function AddPlayerModal({ team, onClose, onAdd }: { team?: Team; onClose: () => 
       <div className="form-row">
         <label>{t('common.number')}<input inputMode="numeric" value={number} onChange={e => setNumber(e.target.value)} autoFocus /></label>
         <label className="grow">{t('common.name')}<input value={name} onChange={e => setName(e.target.value)} /></label>
+      </div>
+    </Modal>
+  )
+}
+
+/** Pick who goes out and who comes in, or the starting five when nobody is on the court yet. */
+function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPlayer, onClose }: {
+  game: Game
+  events: GameEvent[]
+  team?: Team
+  players: Player[]
+  lineup: number[]
+  stats: GameStats
+  onSave: (ins: number[], outs: number[], clockMs: number | undefined) => void
+  onAddPlayer: () => void
+  onClose: () => void
+}) {
+  const { t, lang } = useI18n()
+  const [outs, setOuts] = useState<number[]>([])
+  const [ins, setIns] = useState<number[]>([])
+  const periodMs = periodLengthMs(game, game.period)
+  // The game clock when it is used; without it, the start of the period until something happens in it
+  const [time, setTime] = useState(() =>
+    game.clockEnabled ? formatClock(currentClockMs(game))
+      : events.some(e => e.period === game.period) ? '' : formatClock(periodMs))
+
+  const clockMs = time.trim() ? parseClock(time) : undefined
+  const badTime = clockMs === null || (clockMs != null && clockMs > periodMs)
+  const fouledOut = (id: number) => {
+    const l = stats.players.get(id)
+    return !!l && isPlayerDisqualified(foulCounts(l))
+  }
+  const starting = lineup.length === 0
+  const onCourt = players.filter(p => lineup.includes(p.id!))
+  const bench = players.filter(p => !lineup.includes(p.id!))
+  const count = lineup.length - outs.length + ins.length
+  // Five on the court, or fewer once nobody else can come in
+  const nobodyLeft = bench.every(p => fouledOut(p.id!) || ins.includes(p.id!))
+  const valid = outs.length + ins.length > 0 && count <= 5 && (count === 5 || nobodyLeft) && !badTime
+
+  const toggle = (list: number[], set: (l: number[]) => void, id: number) =>
+    set(list.includes(id) ? list.filter(i => i !== id) : [...list, id])
+  const chip = (p: Player, on: boolean, onClick: () => void, cls: string) => (
+    <button key={p.id} className={`sub-chip ${cls}${on ? ' on' : ''}`} onClick={onClick} disabled={!on && cls === 'in' && fouledOut(p.id!)}>
+      <span className="pnum">{p.number || '–'}</span>
+      <span className="pname">{p.name}</span>
+    </button>
+  )
+
+  return (
+    <Modal
+      title={`${t(starting ? 'live.startingFive' : 'live.sub')}${team ? ` — ${team.name}` : ''}`}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <button className="btn" onClick={onAddPlayer}>＋ {t('teams.addPlayer')}</button>
+          <span className={`sub-count${count > 5 ? ' over' : ''}`}>{t('live.lineupCount', { n: count })}</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="btn btn-primary" disabled={!valid} onClick={() => onSave(ins, outs, clockMs ?? undefined)}>{t('common.save')}</button>
+        </>
+      }
+    >
+      {!starting && (
+        <>
+          <h3 className="sub-head">{t('live.onCourtOut')}</h3>
+          <div className="sub-chips">{onCourt.map(p => chip(p, outs.includes(p.id!), () => toggle(outs, setOuts, p.id!), 'out'))}</div>
+        </>
+      )}
+      <h3 className="sub-head">{t(starting ? 'live.pickStarters' : 'live.benchIn')}</h3>
+      <div className="sub-chips">{bench.map(p => chip(p, ins.includes(p.id!), () => toggle(ins, setIns, p.id!), 'in'))}</div>
+      <div className="form-row sub-time">
+        <label>
+          {t('live.subTime', { period: periodLabel(game.period, lang) })}
+          <input inputMode="numeric" value={time} onChange={e => setTime(e.target.value)} placeholder="5:32" />
+        </label>
+        <p className={badTime ? 'error' : 'hint'}>
+          {badTime ? t('live.badTime', { max: formatClock(periodMs) }) : (
+            <>{clockMs != null && <b>= {formatClock(clockMs)} · </b>}{t('live.subTimeHint')}</>
+          )}
+        </p>
       </div>
     </Modal>
   )

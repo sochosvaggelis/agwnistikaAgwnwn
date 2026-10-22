@@ -10,6 +10,12 @@ export function fmtNum(n: number, gp?: number): string {
   return (n / gp).toFixed(1)
 }
 
+/** Minutes played as m:ss */
+export function fmtMinutes(ms: number): string {
+  const totalSec = Math.round(ms / 1000)
+  return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`
+}
+
 export function fmtDate(iso: string, lang: Lang): string {
   const d = new Date(`${iso}T12:00:00`)
   if (Number.isNaN(d.getTime())) return iso

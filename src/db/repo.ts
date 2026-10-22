@@ -177,8 +177,11 @@ export async function getGameEvents(gameId: number): Promise<GameEvent[]> {
 /**
  * Store events produced by one step of the entry flow.
  * group 'new' starts a new undo group; returns the group used and the new event ids.
+ * `at` gives the clock time to store instead of the game clock's (none when its ms is undefined).
  */
-export async function appendEvents(gameId: number, drafts: Draft[], group: number | 'new'): Promise<{ group: number; ids: number[] }> {
+export async function appendEvents(
+  gameId: number, drafts: Draft[], group: number | 'new', at?: { clockMs?: number },
+): Promise<{ group: number; ids: number[] }> {
   return db.transaction('rw', db.games, db.events, async () => {
     const game = await db.games.get(gameId)
     if (!game) throw new Error('game not found')
@@ -187,7 +190,7 @@ export async function appendEvents(gameId: number, drafts: Draft[], group: numbe
     const last = await db.events.where('[gameId+seq]').between([gameId, Dexie.minKey], [gameId, Dexie.maxKey]).last()
     let seq = last?.seq ?? 0
     const t = now()
-    const clockMs = game.clockEnabled ? currentClockMs(game, t) : undefined
+    const clockMs = at ? at.clockMs : game.clockEnabled ? currentClockMs(game, t) : undefined
     const ids = await db.events.bulkAdd(drafts.map(d => ({
       ...d, gameId, seq: ++seq, group: g, period: game.period, createdAt: t,
       ...(clockMs != null ? { clockMs } : {}),

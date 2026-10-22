@@ -12,7 +12,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Entry | Live, single operator, both teams fully |
 | Stat depth | Full box score + play-by-play + shot chart |
 | Game clock | Optional per game (start/stop; events get game time when on) |
-| Substitutions | Not tracked → no minutes played, no +/- |
+| Substitutions | Tracked per team (changed 2026-10-22): the live screen shows only the five on the court. A new game starts by picking each team's starting five; a Substitution button swaps players and stores a time, the game clock's by default and typed in (optional) without it. Minutes played (MIN) come from these times; a player's minutes are unknown ("–") when a stint has no time, and a team that never picked a five shows its whole roster with no minutes. No +/- |
 | Rules | FIBA: 4×10, OT 5 min, foul-out at 5, team-foul penalty from the 5th foul in a quarter |
 | Shot entry | Court spot → player → action; each team has its own half court, always shown above its roster on the live screen with the team's shots so far (made/missed, like the game report); a Heatmap button next to each court switches that court to the zone heatmap; while a player is chosen for a play, their court shows only that player's shots, with their number and FG made/attempts beside it (changed 2026-10-22) |
 | Chaining | Skippable follow-up prompts (see Input flow) |
@@ -45,6 +45,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
    - STL → *Stolen from?* (creates that opponent's TOV)
    - Offensive foul also counts as a TOV
 5. Team-level button: coach/bench technical.
+   - Substitution (in place of a sixth player): tap who goes out and who comes in, with the time left in the period. Stored as SUB_OUT/SUB_IN events in one undo group; the starting five are SUB_IN events. The button turns red while a fouled-out player is still on the court.
 6. Undo the last event; edit or delete any event from the play-by-play log.
 
 ## FIBA foul logic

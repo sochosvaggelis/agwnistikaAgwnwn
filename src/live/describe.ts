@@ -34,6 +34,9 @@ export function describeShort(ev: GameEvent, players: Map<number, Player>, t: TF
       return { who, what: `${t('act.FOUL')} (${t(`foul.${ev.foulType ?? 'P'}`)})` }
     case 'COACH_FOUL':
       return { who, what: t(`foul.${ev.coachFoulType ?? 'C'}`) }
+    case 'SUB_IN':
+    case 'SUB_OUT':
+      return { who, what: t(`ev.${ev.type}`) }
     default:
       return { who, what: t(`act.${ev.type}`) }
   }

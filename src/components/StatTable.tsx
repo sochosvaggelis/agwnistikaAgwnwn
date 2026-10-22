@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react'
 import { useI18n, type TKey } from '../i18n'
 import { fga, fgm, pct, pir, reb, type StatLine } from '../stats/compute'
-import { fmtNum, fmtPct } from '../format'
+import { fmtMinutes, fmtNum, fmtPct } from '../format'
 
 type Col =
   | { label: TKey; kind: 'n'; get: (l: StatLine) => number }
   | { label: TKey; kind: 'ma'; get: (l: StatLine) => [number, number] }
   | { label: TKey; kind: 'pct'; get: (l: StatLine) => [number, number] }
+  // Time on court, averaged over the games where it is known
+  | { label: TKey; kind: 'min' }
 
 const COLS: Col[] = [
+  { label: 'stat.MIN', kind: 'min' },
   { label: 'stat.PTS', kind: 'n', get: l => l.pts },
   { label: 'stat.2PT', kind: 'ma', get: l => [l.fg2m, l.fg2a] },
   { label: 'stat.3PT', kind: 'ma', get: l => [l.fg3m, l.fg3a] },
@@ -48,6 +51,8 @@ interface Props {
 }
 
 function sortValue(col: Col, row: StatRow, mode: 'total' | 'avg'): number {
+  const { ms, msGames } = row.line
+  if (col.kind === 'min') return msGames === 0 ? -1 : mode === 'avg' ? ms / msGames : ms
   if (col.kind === 'n') {
     const v = col.get(row.line)
     return mode === 'avg' && row.gp ? v / row.gp : v
@@ -59,6 +64,10 @@ function sortValue(col: Col, row: StatRow, mode: 'total' | 'avg'): number {
 
 function cell(col: Col, row: StatRow, mode: 'total' | 'avg'): string {
   const gp = mode === 'avg' ? row.gp : undefined
+  if (col.kind === 'min') {
+    const { ms, msGames } = row.line
+    return msGames === 0 ? '–' : fmtMinutes(mode === 'avg' ? ms / msGames : ms)
+  }
   if (col.kind === 'n') return fmtNum(col.get(row.line), gp)
   const [m, a] = col.get(row.line)
   if (col.kind === 'pct') return fmtPct(pct(m, a))

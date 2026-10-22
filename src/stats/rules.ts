@@ -39,6 +39,25 @@ export function formatClock(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/**
+ * Read a typed clock time: "5:32", "5.32" or "5 32", or digits only where the last two are seconds
+ * ("532" = 5:32, "45" = 0:45). Returns null when it isn't a time.
+ */
+export function parseClock(text: string): number | null {
+  const s = text.trim()
+  const parts = /^\d+$/.test(s) ? [s.slice(0, -2) || '0', s.slice(-2)] : s.split(/[:.\s]+/)
+  if (parts.length !== 2 || !parts.every(p => /^\d+$/.test(p))) return null
+  const [m, sec] = parts.map(Number)
+  return sec < 60 ? (m * 60 + sec) * 1000 : null
+}
+
+/** Time from the start of the game to a moment given by its period and the clock remaining in it */
+export function gameElapsedMs(game: Pick<Game, 'periodLengthMin' | 'otLengthMin'>, period: number, clockMs: number): number {
+  let t = 0
+  for (let p = 1; p < period; p++) t += periodLengthMs(game, p)
+  return t + periodLengthMs(game, period) - clockMs
+}
+
 export interface FoulCounts {
   total: number
   byType: Record<FoulType, number>
