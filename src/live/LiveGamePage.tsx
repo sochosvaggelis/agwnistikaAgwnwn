@@ -8,9 +8,11 @@ import {
   startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
 import {
-  acceptsSpot, advance, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
+  acceptsSpot, advance, chosenPlayer, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
 } from './flow'
-import { computeGameStats, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine } from '../stats/compute'
+import {
+  computeGameStats, fga, fgm, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine,
+} from '../stats/compute'
 import {
   currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, periodLabel, TEAM_FOUL_PENALTY,
 } from '../stats/rules'
@@ -65,11 +67,6 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   }), [game.roster, playerMap])
 
   const stats = useMemo(() => computeGameStats(events, game), [events, game])
-  // Each team's court shows its shots so far, like the game report
-  const shots = useMemo(() => ({
-    home: shotsOf(events, e => e.side === 'home'),
-    away: shotsOf(events, e => e.side === 'away'),
-  }), [events])
 
   // ---------- entry flow ----------
   const [step, setStepState] = useState<Step>(IDLE)
@@ -78,6 +75,15 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     stepRef.current = s
     setStepState(s)
   }
+
+  // Each team's court shows its shots so far, like the game report; only the chosen player's while a play is about them
+  const chosen = chosenPlayer(step)
+  const chosenSide = chosen?.side
+  const chosenId = chosen?.playerId
+  const shots = useMemo(() => {
+    const of = (side: Side) => shotsOf(events, e => e.side === side && (chosenSide !== side || e.playerId === chosenId))
+    return { home: of('home'), away: of('away') }
+  }, [events, chosenSide, chosenId])
 
   const queue = useRef<Promise<void>>(Promise.resolve())
   const flowGroup = useRef<number | null>(null)
@@ -363,7 +369,9 @@ interface RosterProps {
 function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlayer, onCoach, onAdd }: RosterProps) {
   const { t } = useI18n()
   const picking = step.kind === 'pick' || step.kind === 'player'
-  const selected = step.kind === 'action' || step.kind === 'foulType' ? step.actor : undefined
+  const chosen = chosenPlayer(step)
+  const selected = chosen?.side === side ? players.find(p => p.id === chosen.playerId) : undefined
+  const selectedLine = selected && stats.players.get(selected.id!)
   const coach = stats.teams[side].coachFouls
   const courtOn = acceptsSpot(step, side)
   const spot = markedSpot(step)
@@ -375,6 +383,13 @@ function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlay
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
       <div className="roster-name">{name}</div>
       <div className="live-court-area">
+        {/* The court shows only this player's shots */}
+        {selected && (
+          <div className="court-focus">
+            <span className="court-focus-num">#{selected.number || '–'}</span>
+            <span>{t('shots.viewShots')} {selectedLine ? `${fgm(selectedLine)}/${fga(selectedLine)}` : '0/0'}</span>
+          </div>
+        )}
         <div className={`live-court${courtOn ? '' : ' off'}`}>
           <Court
             shots={zones ? undefined : shots}
@@ -392,7 +407,7 @@ function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlay
         {players.map(p => {
           const line = stats.players.get(p.id!)
           const eligible = !picking || isEligible(step, side, p.id!)
-          const isSelected = selected?.side === side && selected.playerId === p.id
+          const isSelected = selected?.id === p.id
           return (
             <PlayerButton
               key={p.id}

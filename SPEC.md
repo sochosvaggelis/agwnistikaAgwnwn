@@ -14,7 +14,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Game clock | Optional per game (start/stop; events get game time when on) |
 | Substitutions | Not tracked → no minutes played, no +/- |
 | Rules | FIBA: 4×10, OT 5 min, foul-out at 5, team-foul penalty from the 5th foul in a quarter |
-| Shot entry | Court spot → player → action; each team has its own half court, always shown above its roster on the live screen with the team's shots so far (made/missed, like the game report); a Heatmap button next to each court switches that court to the zone heatmap (changed 2026-10-22) |
+| Shot entry | Court spot → player → action; each team has its own half court, always shown above its roster on the live screen with the team's shots so far (made/missed, like the game report); a Heatmap button next to each court switches that court to the zone heatmap; while a player is chosen for a play, their court shows only that player's shots, with their number and FG made/attempts beside it (changed 2026-10-22) |
 | Chaining | Skippable follow-up prompts (see Input flow) |
 | Opponents | Saved reusable teams, or create one at game time and keep it |
 | Fouls | Type: personal / shooting / offensive / technical / unsportsmanlike + fouled player |

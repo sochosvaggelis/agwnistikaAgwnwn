@@ -18,7 +18,7 @@ export type PickPurpose =
   | 'ftShooter' // who shoots the free throws
   | 'blockedShooter' // after a standalone block, opponents of the blocker
 
-interface PlayerRef {
+export interface PlayerRef {
   side: Side
   playerId: number
 }
@@ -101,6 +101,11 @@ function spotOf(input: { x: number; y: number }): Spot {
 export function acceptsSpot(step: Step, side: Side): boolean {
   if (step.kind === 'court') return step.actor.side === side
   return step.kind === 'idle' || step.kind === 'player' || step.kind === 'action'
+}
+
+/** The player tapped for the play being entered, while the play is still about them. */
+export function chosenPlayer(step: Step): PlayerRef | undefined {
+  return step.kind === 'action' || step.kind === 'foulType' || step.kind === 'court' ? step.actor : undefined
 }
 
 /** The spot of the play being entered, and the team whose court shows it. */

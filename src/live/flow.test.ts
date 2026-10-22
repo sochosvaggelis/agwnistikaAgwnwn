@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advance, type ActionKey, type FlowContext, type Input, type Step } from './flow'
+import { advance, chosenPlayer, type ActionKey, type FlowContext, type Input, type Step } from './flow'
 
 const ctx: FlowContext = { teamFouls: { home: 0, away: 0 } }
 
@@ -248,6 +248,13 @@ describe('action-first flow', () => {
 
   it('asks for the spot of a field goal entered without one', () => {
     expect(run([act('FG2+'), home(1)]).step).toEqual({ kind: 'court', actor: { side: 'home', playerId: 1 }, shot: 'FG2', made: true })
+  })
+
+  it('keeps the chosen player until the play moves on to someone else', () => {
+    expect(chosenPlayer(run([act('FG2+')]).step)).toBeUndefined()
+    expect(chosenPlayer(run([away(9)]).step)).toEqual({ side: 'away', playerId: 9 })
+    expect(chosenPlayer(run([away(9), act('FG2+')]).step)).toEqual({ side: 'away', playerId: 9 })
+    expect(chosenPlayer(run([away(9), act('FG2+'), { t: 'skip' }]).step)).toBeUndefined()
   })
 
   it('switches to the last action tapped, and cancelling stores nothing', () => {

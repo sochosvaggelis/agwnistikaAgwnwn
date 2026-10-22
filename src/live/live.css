@@ -196,6 +196,11 @@
   align-items: start;
 }
 .live-court-area .live-court { grid-column: 2; }
+/* Left of the court: whose shots it shows while a player is chosen */
+.court-focus { grid-column: 1; justify-self: start; display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; font-weight: 600; }
+.court-focus-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.side-home .court-focus-num { color: var(--home); }
+.side-away .court-focus-num { color: var(--away); }
 .heat-toggle { grid-column: 3; justify-self: end; font-size: 0.85rem; line-height: 1.2; }
 .heat-toggle.on { background: var(--accent); border-color: transparent; color: #fff; }
 .live-court {
