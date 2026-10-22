@@ -6,7 +6,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 
 | Topic | Decision |
 |---|---|
-| Device | Android tablet, landscape |
+| Device | Android tablet, portrait only (changed 2026-10-22) |
 | Stack | PWA: Vite + React + TypeScript, IndexedDB via Dexie, vite-plugin-pwa |
 | Hosting | GitHub Pages (HashRouter, base path); fully offline after first install |
 | Entry | Live, single operator, both teams fully |
