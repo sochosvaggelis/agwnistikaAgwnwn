@@ -16,6 +16,8 @@ import {
 } from '../stats/rules'
 import { useI18n } from '../i18n'
 import { Court } from '../components/Court'
+import { ZoneLayer } from '../components/ZoneLayer'
+import { courtZoneSplits } from '../stats/zones'
 import { Modal } from '../components/Modal'
 import { StatTable } from '../components/StatTable'
 import { describeEvent, describeShort, groupEvents } from './describe'
@@ -365,17 +367,26 @@ function RosterColumn({ side, name, players, stats, shots, step, onCourt, onPlay
   const coach = stats.teams[side].coachFouls
   const courtOn = acceptsSpot(step, side)
   const spot = markedSpot(step)
+  // The heatmap replaces the shot marks, like on the team stats page
+  const [heat, setHeat] = useState(false)
+  const zones = useMemo(() => (heat ? courtZoneSplits(shots) : undefined), [heat, shots])
 
   return (
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
       <div className="roster-name">{name}</div>
-      <div className={`live-court${courtOn ? '' : ' off'}`}>
-        <Court
-          shots={shots}
-          onTap={courtOn ? onCourt : undefined}
-          highlight={step.kind === 'court' && step.actor.side === side ? step.shot : undefined}
-          marker={spot?.side === side ? spot.at : undefined}
-        />
+      <div className="live-court-area">
+        <div className={`live-court${courtOn ? '' : ' off'}`}>
+          <Court
+            shots={zones ? undefined : shots}
+            layer={zones && <ZoneLayer splits={zones} shown={() => true} />}
+            onTap={courtOn ? onCourt : undefined}
+            highlight={step.kind === 'court' && step.actor.side === side ? step.shot : undefined}
+            marker={spot?.side === side ? spot.at : undefined}
+          />
+        </div>
+        <button className={`btn btn-sm heat-toggle${heat ? ' on' : ''}`} onClick={() => setHeat(h => !h)} aria-pressed={heat}>
+          {t('shots.viewHeat')}
+        </button>
       </div>
       <div className="roster-grid">
         {players.map(p => {

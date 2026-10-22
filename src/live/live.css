@@ -187,6 +187,17 @@
 .btn-coach.dq { background: var(--danger); color: #fff; }
 
 /* ---------- each team's court, above its players ---------- */
+/* The court in the middle, the heatmap toggle in the free space to its right */
+.live-court-area {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+.live-court-area .live-court { grid-column: 2; }
+.heat-toggle { grid-column: 3; justify-self: end; font-size: 0.85rem; line-height: 1.2; }
+.heat-toggle.on { background: var(--accent); border-color: transparent; color: #fff; }
 .live-court {
   flex-shrink: 0;
   align-self: center;
