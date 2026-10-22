@@ -25,7 +25,7 @@ export default defineConfig(({ command, isPreview }) => ({
         background_color: '#0b1533',
         display: 'fullscreen',
         display_override: ['fullscreen', 'standalone'],
-        orientation: 'portrait',
+        orientation: 'landscape',
         start_url: '.',
         scope: '.',
         icons: [

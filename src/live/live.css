@@ -15,8 +15,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 12px;
+  padding: 6px 12px;
   /* A scoreboard: lighter team colors so the scores read on navy */
   --home: #8ab8ff;
   --away: #ffab70;
@@ -31,13 +31,13 @@
 .team-score {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 .team-score.side-home { justify-content: flex-end; }
 .team-score.side-away { flex-direction: row-reverse; justify-content: flex-end; }
 .team-score .score {
-  font-size: 2rem;
+  font-size: 2.4rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -56,7 +56,7 @@
 }
 .team-fouls.penalty { background: var(--danger); color: #fff; font-weight: 700; }
 
-.live-mid { display: flex; align-items: center; gap: 6px; }
+.live-mid { display: flex; align-items: center; gap: 12px; }
 .live-period { display: flex; align-items: center; gap: 2px; }
 .period-label { font-size: 1.3rem; font-weight: 700; min-width: 3.2ch; text-align: center; }
 .live-clock { display: flex; align-items: center; gap: 6px; }
@@ -79,9 +79,9 @@
 /* ---------- body ---------- */
 .live-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 6px;
-  padding: 6px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
   min-height: 0;
 }
 .roster {
@@ -110,7 +110,7 @@
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: minmax(62px, auto);
   gap: 6px;
   align-content: start;
@@ -195,7 +195,7 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
   transition: opacity 120ms ease;
 }
-/* Capped so the action buttons still fit below it */
+/* Capped so the action buttons still fit below it in landscape */
 .live-court .court { width: 100%; height: auto; max-height: 42dvh; }
 .live-court.off { opacity: 0.45; }
 .panel {
@@ -223,11 +223,11 @@
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: minmax(68px, 1fr);
   gap: 8px;
   flex: 1;
-  max-height: 620px;
+  max-height: 420px;
 }
 .action-btn { font-size: 1.15rem; font-weight: 700; }
 .act-FG2made, .act-FG3made, .act-FTmade { background: var(--made-soft); color: var(--made-strong); }
@@ -275,7 +275,7 @@
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
-.live-bottom .btn { min-height: 52px; flex-shrink: 0; padding: 8px 12px; }
+.live-bottom .btn { min-height: 52px; flex-shrink: 0; }
 .live-bottom .btn-undo {
   flex: 1 1 0;
   min-width: 0;
