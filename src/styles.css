@@ -102,6 +102,8 @@ html, body {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  /* No pull-to-refresh: a reload mid-game loses the play being entered */
+  overscroll-behavior-y: none;
 }
 
 a { color: var(--primary); text-decoration: none; }
