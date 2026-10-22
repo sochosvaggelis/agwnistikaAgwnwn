@@ -236,11 +236,13 @@
 .btn-coach.dq { background: var(--danger); color: #fff; }
 
 /* ---------- each team's court, above its players ---------- */
-/* The court in the middle, the heatmap toggle in the free space to its right */
+/* The court in the middle, with room on both sides for what goes beside it */
 .live-court-area {
+  --court-side: 72px;
   flex-shrink: 0;
+  container-type: inline-size;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(var(--court-side), 1fr) auto minmax(var(--court-side), 1fr);
   gap: 6px;
   align-items: start;
 }
@@ -250,8 +252,42 @@
 .court-focus-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .side-home .court-focus-num { color: var(--home); }
 .side-away .court-focus-num { color: var(--away); }
-.heat-toggle { grid-column: 3; justify-self: end; font-size: 0.85rem; line-height: 1.2; }
+/* Right of the court: the heatmap toggle, then which quarter's shots it shows, as tall as the court */
+.court-tools {
+  grid-column: 3;
+  justify-self: start;
+  align-self: stretch;
+  width: var(--court-side);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.heat-toggle { font-size: 0.85rem; line-height: 1.2; padding-inline: 6px; }
 .heat-toggle.on { background: var(--accent); border-color: transparent; color: #fff; }
+.court-periods {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.court-periods button {
+  flex: 1;
+  min-height: 30px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  touch-action: manipulation;
+}
+.court-periods button.on { background: var(--accent); color: #fff; }
+.court-periods button:disabled { opacity: 0.35; }
 .live-court {
   flex-shrink: 0;
   align-self: center;
@@ -262,8 +298,9 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
   transition: opacity 120ms ease;
 }
-/* Sized by height so four rows of players still fit below it */
-.live-court .court { width: auto; height: 32dvh; }
+/* Sized by height so four rows of players still fit below it, and no wider than the room between its sides
+   (the court's viewBox is 15.6 × 14.6) */
+.live-court .court { width: auto; height: min(32dvh, (100cqw - 2 * var(--court-side) - 12px) * 14.6 / 15.6); }
 .live-court.off { opacity: 0.45; }
 
 /* ---------- center column: the panel for the current step ---------- */

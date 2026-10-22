@@ -157,6 +157,8 @@ export const el: Record<TKey, string> = {
   'live.subTime': 'Υπόλοιπο χρόνου στην {period}',
   'live.subTimeHint': 'Προαιρετικό, για τα λεπτά συμμετοχής. Αρκούν ψηφία: 532 = 5:32',
   'live.badTime': 'Δώστε χρόνο από 0:00 έως {max}',
+  'live.courtPeriods': 'Σουτ ανά περίοδο',
+  'live.overtimes': 'Παρ',
 
   'act.FG2+': '2Π ✓',
   'act.FG2-': '2Π ✗',

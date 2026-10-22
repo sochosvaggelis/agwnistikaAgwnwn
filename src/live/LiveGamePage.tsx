@@ -11,11 +11,11 @@ import {
   acceptsSpot, advance, chosenPlayer, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
 } from './flow'
 import {
-  computeGameStats, fga, fgm, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine,
+  computeGameStats, foulCounts, shotsOf, teamFoulsInPeriod, type GameStats, type Shot, type StatLine,
 } from '../stats/compute'
 import {
-  currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isPlayerDisqualified, isThreeByLocation, opposite, parseClock,
-  periodLabel, periodLengthMs, TEAM_FOUL_PENALTY,
+  currentClockMs, formatClock, FOUL_TYPES, isCoachDisqualified, isOvertime, isPlayerDisqualified, isThreeByLocation, opposite,
+  parseClock, periodLabel, periodLengthMs, REGULATION_PERIODS, TEAM_FOUL_PENALTY,
 } from '../stats/rules'
 import { lineups } from '../stats/lineup'
 import { useI18n } from '../i18n'
@@ -29,6 +29,11 @@ import './live.css'
 
 const SIDES: Side[] = ['home', 'away']
 const IDLE: Step = { kind: 'idle' }
+
+/** Which shots a court shows: the whole game, one quarter, or the overtimes together (any overtime period) */
+type PeriodFilter = 'all' | number
+const OVERTIMES = REGULATION_PERIODS + 1
+const inPeriod = (f: PeriodFilter, period: number) => f === 'all' || (isOvertime(f) ? isOvertime(period) : period === f)
 
 /** A step to return to, and the events stored when leaving it */
 interface BackEntry {
@@ -80,14 +85,29 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     setStepState(s)
   }
 
-  // Each team's court shows its shots so far, like the game report; only the chosen player's while a play is about them
+  // Each team's court shows its shots so far, like the game report; only the chosen player's while a play is about them,
+  // and only one quarter's when its filter is set
+  const [courtPeriods, setCourtPeriods] = useState<Record<Side, PeriodFilter>>({ home: 'all', away: 'all' })
   const chosen = chosenPlayer(step)
   const chosenSide = chosen?.side
   const chosenId = chosen?.playerId
   const shots = useMemo(() => {
-    const of = (side: Side) => shotsOf(events, e => e.side === side && (chosenSide !== side || e.playerId === chosenId))
+    const of = (side: Side) => shotsOf(events, e =>
+      e.side === side && inPeriod(courtPeriods[side], e.period) && (chosenSide !== side || e.playerId === chosenId))
     return { home: of('home'), away: of('away') }
-  }, [events, chosenSide, chosenId])
+  }, [events, chosenSide, chosenId, courtPeriods])
+  // The chosen player's field goals in the same quarter, including those without a spot
+  const chosenFg = useMemo(() => {
+    const fg = { m: 0, a: 0 }
+    if (!chosenSide) return fg
+    for (const e of events) {
+      if ((e.type === 'FG2' || e.type === 'FG3') && e.playerId === chosenId && inPeriod(courtPeriods[chosenSide], e.period)) {
+        fg.a++
+        if (e.made) fg.m++
+      }
+    }
+    return fg
+  }, [events, chosenSide, chosenId, courtPeriods])
 
   const queue = useRef<Promise<void>>(Promise.resolve())
   const flowGroup = useRef<number | null>(null)
@@ -292,6 +312,8 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
       <div className="live-body">
         <RosterColumn
           side="home" name={teamName('home')} players={roster.home} lineup={lineup.home} stats={stats} shots={shots.home} step={step}
+          period={game.period} shown={courtPeriods.home} chosenFg={chosenFg}
+          onShown={f => setCourtPeriods(p => ({ ...p, home: f }))}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'home', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'home', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'home' })}
@@ -301,6 +323,8 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
         <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         <RosterColumn
           side="away" name={teamName('away')} players={roster.away} lineup={lineup.away} stats={stats} shots={shots.away} step={step}
+          period={game.period} shown={courtPeriods.away} chosenFg={chosenFg}
+          onShown={f => setCourtPeriods(p => ({ ...p, away: f }))}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'away', x, y })}
           onPlayer={p => dispatch({ t: 'player', side: 'away', playerId: p })}
           onCoach={() => dispatch({ t: 'coachFoul', side: 'away' })}
@@ -415,6 +439,11 @@ interface RosterProps {
   stats: GameStats
   shots: Shot[]
   step: Step
+  /** The game's current period, and which quarter the court shows */
+  period: number
+  shown: PeriodFilter
+  chosenFg: { m: number; a: number }
+  onShown: (f: PeriodFilter) => void
   onCourt: (x: number, y: number) => void
   onPlayer: (id: number) => void
   onCoach: () => void
@@ -422,8 +451,10 @@ interface RosterProps {
   onSub: () => void
 }
 
-function RosterColumn({ side, name, players: roster, lineup, stats, shots, step, onCourt, onPlayer, onCoach, onAdd, onSub }: RosterProps) {
-  const { t } = useI18n()
+function RosterColumn({
+  side, name, players: roster, lineup, stats, shots, step, period, shown, chosenFg, onShown, onCourt, onPlayer, onCoach, onAdd, onSub,
+}: RosterProps) {
+  const { t, lang } = useI18n()
   // Once the team has a lineup, only the players on the court are shown
   const players = lineup ? roster.filter(p => lineup.includes(p.id!)) : roster
   const fouledOutOnCourt = !!lineup && players.some(p => {
@@ -433,13 +464,15 @@ function RosterColumn({ side, name, players: roster, lineup, stats, shots, step,
   const picking = step.kind === 'pick' || step.kind === 'player'
   const chosen = chosenPlayer(step)
   const selected = chosen?.side === side ? players.find(p => p.id === chosen.playerId) : undefined
-  const selectedLine = selected && stats.players.get(selected.id!)
   const coach = stats.teams[side].coachFouls
   const courtOn = acceptsSpot(step, side)
   const spot = markedSpot(step)
   // The heatmap replaces the shot marks, like on the team stats page
   const [heat, setHeat] = useState(false)
   const zones = useMemo(() => (heat ? courtZoneSplits(shots) : undefined), [heat, shots])
+  // The four quarters, then one button for all the overtimes once there are any; quarters still to come can't be picked
+  const periodFilters: PeriodFilter[] = ['all', 1, 2, 3, 4, ...(isOvertime(period) ? [OVERTIMES] : [])]
+  const filterLabel = (f: PeriodFilter) => (f === 'all' ? t('common.all') : isOvertime(f) ? t('live.overtimes') : periodLabel(f, lang))
 
   return (
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
@@ -449,7 +482,7 @@ function RosterColumn({ side, name, players: roster, lineup, stats, shots, step,
         {selected && (
           <div className="court-focus">
             <span className="court-focus-num">#{selected.number || '–'}</span>
-            <span>{t('shots.viewShots')} {selectedLine ? `${fgm(selectedLine)}/${fga(selectedLine)}` : '0/0'}</span>
+            <span>{t('shots.viewShots')} {chosenFg.m}/{chosenFg.a}</span>
           </div>
         )}
         <div className={`live-court${courtOn ? '' : ' off'}`}>
@@ -461,9 +494,24 @@ function RosterColumn({ side, name, players: roster, lineup, stats, shots, step,
             marker={spot?.side === side ? spot.at : undefined}
           />
         </div>
-        <button className={`btn btn-sm heat-toggle${heat ? ' on' : ''}`} onClick={() => setHeat(h => !h)} aria-pressed={heat}>
-          {t('shots.viewHeat')}
-        </button>
+        <div className="court-tools">
+          <button className={`btn btn-sm heat-toggle${heat ? ' on' : ''}`} onClick={() => setHeat(h => !h)} aria-pressed={heat}>
+            {t('shots.viewHeat')}
+          </button>
+          <div className="court-periods" role="group" aria-label={t('live.courtPeriods')}>
+            {periodFilters.map(f => (
+              <button
+                key={f}
+                className={f === shown ? 'on' : ''}
+                onClick={() => onShown(f)}
+                disabled={f !== 'all' && f > period}
+                aria-pressed={f === shown}
+              >
+                {filterLabel(f)}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <div className={`roster-grid${lineup ? ' on-court' : ''}`}>
         {!lineup && <button className="player-btn player-sub" onClick={onSub}>{t('live.startingFive')}</button>}

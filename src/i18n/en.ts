@@ -155,6 +155,8 @@ export const en = {
   'live.subTime': 'Time left in {period}',
   'live.subTimeHint': 'Optional, for minutes played. Digits are enough: 532 = 5:32',
   'live.badTime': 'Enter a time from 0:00 to {max}',
+  'live.courtPeriods': 'Shots by quarter',
+  'live.overtimes': 'OT',
 
   'act.FG2+': '2PT ✓',
   'act.FG2-': '2PT ✗',
