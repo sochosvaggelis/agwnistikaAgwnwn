@@ -432,6 +432,11 @@ table { border-collapse: collapse; width: 100%; }
 .log-text.side-home { border-left-color: var(--home); }
 .log-text.side-away { border-left-color: var(--away); }
 .log-period { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; min-width: 6ch; }
+/* Each period's shots, one small court per period; overtimes wrap to a new row once the row is full */
+.period-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.period-shots figure { margin: 0; }
+.period-shots .court { width: 100%; height: auto; clip-path: inset(0 round 8px); }
+.period-shots figcaption { margin-top: 3px; text-align: center; font-variant-numeric: tabular-nums; }
 
 .toast {
   position: fixed;

@@ -225,6 +225,7 @@ export const en = {
   'game.boxScore': 'Box score',
   'game.playByPlay': 'Play-by-play',
   'game.shotChart': 'Shot chart',
+  'game.shotsByPeriod': 'Shots by quarter',
   'game.print': 'PDF / Print',
   'game.continue': 'Continue entry',
   'game.reopen': 'Reopen for entry',

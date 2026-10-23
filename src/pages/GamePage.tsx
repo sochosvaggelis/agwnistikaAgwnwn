@@ -5,13 +5,14 @@ import { useI18n } from '../i18n'
 import { db } from '../db/db'
 import type { GameEvent, Player, Side } from '../db/types'
 import { deleteEvent, deleteGame, getGameEvents, playerLabel, sortPlayers, updateEvent, updateGame } from '../db/repo'
-import { computeGameStats, shotsOf } from '../stats/compute'
+import { computeGameStats, fga, fgm, pct, shotsOf } from '../stats/compute'
 import { FOUL_TYPES, formatClock, periodLabel, REGULATION_PERIODS } from '../stats/rules'
 import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
+import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
 import { describeEvent } from '../live/describe'
-import { fmtDate } from '../format'
+import { fmtDate, fmtPct } from '../format'
 
 const SIDES: Side[] = ['home', 'away']
 
@@ -124,6 +125,16 @@ export function GamePage() {
         </div>
       </div>
 
+      <div className="card">
+        <h2>{t('game.shotsByPeriod')}</h2>
+        {SIDES.map(side => (
+          <div key={side}>
+            <h3>{teamName(side)}</h3>
+            <PeriodShots events={events.filter(e => e.side === side)} periods={periods} side={side} />
+          </div>
+        ))}
+      </div>
+
       <div className="card no-print">
         <h2>{t('game.playByPlay')}</h2>
         {events.length === 0 && <p className="muted">{t('common.noData')}</p>}
@@ -154,6 +165,29 @@ export function GamePage() {
 
 function sidePlayersAll(players: Player[], teamId: number): Player[] {
   return sortPlayers(players.filter(p => p.teamId === teamId))
+}
+
+/** A small court per period with one team's shots in it, and its field goals made/attempted (shots without a spot count too) */
+function PeriodShots({ events, periods, side }: { events: GameEvent[]; periods: number; side: Side }) {
+  const { t, lang } = useI18n()
+  return (
+    <div className="period-shots">
+      {Array.from({ length: periods }, (_, i) => {
+        const inPeriod = events.filter(e => e.period === i + 1)
+        const line = computeGameStats(inPeriod).teams[side].totals
+        return (
+          <figure key={i}>
+            <Court shots={shotsOf(inPeriod, () => true)} />
+            <figcaption>
+              <b>{periodLabel(i + 1, lang)}</b> {fgm(line)}/{fga(line)} · {fmtPct(pct(fgm(line), fga(line)))}%
+              <br />
+              <span className="muted">{t('stat.2PT')} {line.fg2m}/{line.fg2a} · {t('stat.3PT')} {line.fg3m}/{line.fg3a}</span>
+            </figcaption>
+          </figure>
+        )
+      })}
+    </div>
+  )
 }
 
 function EditEventModal({ ev, periods, players, opponents, onClose }: {

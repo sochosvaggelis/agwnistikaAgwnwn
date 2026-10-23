@@ -23,7 +23,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Organization | Season → Competition → Game; a season has at most one competition of each kind: League, Cup, Friendlies, Other (new seasons start with the first three; names are editable and unique per season) |
 | Role | Coach/staff of one team ("my team"), opponents secondary |
 | Views | Game box score + play-by-play, player profile, team season stats (shot chart with a 2PT/3PT filter and a zone heatmap: 11 court zones, each with made/attempts and FG%, colored hot/cold against 1 point per shot), head-to-head vs opponent |
-| Export | PDF box score, via a print stylesheet and Android's "Save as PDF" (handles Greek text with no embedded font) |
+| Export | PDF box score, via a print stylesheet and Android's "Save as PDF" (handles Greek text with no embedded font). Besides the whole game's shot chart, the game report (on screen and in the PDF) has a small court per period for each team with that period's made/missed shots and its FG, 2PT and 3PT made/attempts; each overtime gets its own court (added 2026-10-23) |
 | Backup | Export/import full DB as .json, plus a reminder when the last backup is older than N days |
 | Language | Greek + English, switchable |
 
