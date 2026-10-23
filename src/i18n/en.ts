@@ -205,6 +205,7 @@ export const en = {
   'stat.2PT': '2PT',
   'stat.3PT': '3PT',
   'stat.FT': 'FT',
+  'stat.FG': 'FG',
   'stat.FG%': 'FG%',
   'stat.2P%': '2P%',
   'stat.3P%': '3P%',

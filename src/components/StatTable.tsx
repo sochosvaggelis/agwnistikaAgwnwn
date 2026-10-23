@@ -10,15 +10,18 @@ type Col =
   // Time on court, averaged over the games where it is known
   | { label: TKey; kind: 'min' }
 
+// Points, then each kind of shot with its percentage (free throws, twos, threes, all field goals), then the rest
 const COLS: Col[] = [
-  { label: 'stat.MIN', kind: 'min' },
   { label: 'stat.PTS', kind: 'n', get: l => l.pts },
-  { label: 'stat.2PT', kind: 'ma', get: l => [l.fg2m, l.fg2a] },
-  { label: 'stat.3PT', kind: 'ma', get: l => [l.fg3m, l.fg3a] },
   { label: 'stat.FT', kind: 'ma', get: l => [l.ftm, l.fta] },
-  { label: 'stat.FG%', kind: 'pct', get: l => [fgm(l), fga(l)] },
-  { label: 'stat.3P%', kind: 'pct', get: l => [l.fg3m, l.fg3a] },
   { label: 'stat.FT%', kind: 'pct', get: l => [l.ftm, l.fta] },
+  { label: 'stat.2PT', kind: 'ma', get: l => [l.fg2m, l.fg2a] },
+  { label: 'stat.2P%', kind: 'pct', get: l => [l.fg2m, l.fg2a] },
+  { label: 'stat.3PT', kind: 'ma', get: l => [l.fg3m, l.fg3a] },
+  { label: 'stat.3P%', kind: 'pct', get: l => [l.fg3m, l.fg3a] },
+  { label: 'stat.FG', kind: 'ma', get: l => [fgm(l), fga(l)] },
+  { label: 'stat.FG%', kind: 'pct', get: l => [fgm(l), fga(l)] },
+  { label: 'stat.MIN', kind: 'min' },
   { label: 'stat.OREB', kind: 'n', get: l => l.oreb },
   { label: 'stat.DREB', kind: 'n', get: l => l.dreb },
   { label: 'stat.REB', kind: 'n', get: reb },

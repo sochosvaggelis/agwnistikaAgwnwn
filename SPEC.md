@@ -10,7 +10,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Stack | PWA: Vite + React + TypeScript, IndexedDB via Dexie, vite-plugin-pwa |
 | Hosting | GitHub Pages (HashRouter, base path); fully offline after first install |
 | Entry | Live, single operator, both teams fully |
-| Stat depth | Full box score + play-by-play + shot chart |
+| Stat depth | Full box score + play-by-play + shot chart. Every box score has the same columns, in this order (changed 2026-10-23): player, PTS, FT, FT%, 2PT, 2P%, 3PT, 3P%, FG, FG%, then MIN and the rest |
 | Game clock | Optional per game (start/stop; events get game time when on) |
 | Substitutions | Tracked per team (changed 2026-10-22): the live screen shows only the five on the court. A new game starts by picking each team's starting five, which is always stored at the tip-off (1st quarter, full time, ahead of everything), even when picked after plays were entered; a Substitution button swaps players and stores a time, the game clock's by default and typed in (optional) without it. Minutes played (MIN) come from these times; a player's minutes are unknown ("–") when a stint has no time, and a team that never picked a five shows its whole roster with no minutes. No +/- |
 | Rules | FIBA: 4×10, OT 5 min, foul-out at 5, team-foul penalty from the 5th foul in a quarter. The live scoreboard shows each team's fouls in the quarter as 5 lights in the team's color plus the number of fouls (which keeps counting past five); the 5th light, the first foul with free throws, is red |

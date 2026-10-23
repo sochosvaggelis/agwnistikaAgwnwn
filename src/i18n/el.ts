@@ -207,6 +207,7 @@ export const el: Record<TKey, string> = {
   'stat.2PT': '2Π',
   'stat.3PT': '3Π',
   'stat.FT': 'ΒΟΛ',
+  'stat.FG': 'ΣΟΥΤ',
   'stat.FG%': 'ΣΟΥΤ%',
   'stat.2P%': '2Π%',
   'stat.3P%': '3Π%',
