@@ -47,6 +47,8 @@ export function useSetting<T>(key: string): T | null | undefined {
 export const SETTING_LAST_BACKUP = 'lastBackupAt'
 export const SETTING_REMINDER_DAYS = 'backupReminderDays'
 export const DEFAULT_REMINDER_DAYS = 7
+/** The parts of the game report the last PDF had */
+export const SETTING_PRINT_PARTS = 'printParts'
 
 export function useById<T extends { id?: number }>(items: T[] | undefined): Map<number, T> {
   return useMemo(() => new Map((items ?? []).map(i => [i.id!, i])), [items])

@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useI18n } from '../i18n'
+import { useI18n, type TKey } from '../i18n'
 import { db } from '../db/db'
-import type { GameEvent, Player, Side } from '../db/types'
-import { deleteEvent, deleteGame, getGameEvents, playerLabel, sortPlayers, updateEvent, updateGame } from '../db/repo'
+import type { Game, GameEvent, Player, Side } from '../db/types'
+import { deleteEvent, deleteGame, getGameEvents, playerLabel, setSetting, sortPlayers, updateEvent, updateGame } from '../db/repo'
+import { SETTING_PRINT_PARTS, useSetting } from '../hooks'
 import { computeGameStats, fga, fgm, pct, shotsOf } from '../stats/compute'
 import { FOUL_TYPES, formatClock, periodLabel, REGULATION_PERIODS } from '../stats/rules'
 import { StatTable } from '../components/StatTable'
@@ -15,6 +17,22 @@ import { describeEvent } from '../live/describe'
 import { fmtDate, fmtPct } from '../format'
 
 const SIDES: Side[] = ['home', 'away']
+
+/** The parts of the report a PDF can have, in the report's order */
+const PRINT_PARTS = ['score', 'box', 'shotChart', 'shotsByPeriod', 'boxByPeriod'] as const
+type PrintPart = (typeof PRINT_PARTS)[number]
+const PRINT_PART_LABEL: Record<PrintPart, TKey> = {
+  score: 'game.result',
+  box: 'game.boxScore',
+  shotChart: 'game.shotChart',
+  shotsByPeriod: 'game.shotsByPeriod',
+  boxByPeriod: 'game.boxByPeriod',
+}
+
+interface PrintChoice {
+  parts: PrintPart[]
+  sides: Side[]
+}
 
 export function GamePage() {
   const { id } = useParams()
@@ -32,6 +50,10 @@ export function GamePage() {
     [game?.homeTeamId, game?.awayTeamId],
   )
   const [editing, setEditing] = useState<GameEvent | null>(null)
+  const savedParts = useSetting<PrintPart[]>(SETTING_PRINT_PARTS)
+  // What the last PDF had; printing from the browser menu prints the same
+  const [printChoice, setPrintChoice] = useState<PrintChoice>({ parts: [...PRINT_PARTS], sides: SIDES })
+  const [choosingPrint, setChoosingPrint] = useState(false)
 
   const playerMap = useMemo(() => new Map((teamPlayers ?? []).map(p => [p.id!, p])), [teamPlayers])
   const stats = useMemo(() => (game && events ? computeGameStats(events, game) : null), [game, events])
@@ -53,6 +75,19 @@ export function GamePage() {
     await deleteGame(gameId)
     navigate('/', { replace: true })
   }
+  const print = (choice: PrintChoice) => {
+    setSetting(SETTING_PRINT_PARTS, choice.parts)
+    // The page has to show the chosen parts, without the dialog, before the browser takes it
+    flushSync(() => {
+      setPrintChoice(choice)
+      setChoosingPrint(false)
+    })
+    window.print()
+  }
+  /** Class that leaves a part, or one team's share of it, out of the PDF */
+  const unprinted = (part: PrintPart, side?: Side) =>
+    printChoice.parts.includes(part) && (side == null || printChoice.sides.includes(side)) ? '' : ' no-print'
+  const printed = (part: PrintPart) => printChoice.parts.includes(part)
 
   return (
     <>
@@ -60,12 +95,12 @@ export function GamePage() {
         {game.status === 'live'
           ? <Link className="btn btn-primary" to={`/games/${gameId}/live`}>▶ {t('game.continue')}</Link>
           : <button className="btn" onClick={reopen}>✎ {t('game.reopen')}</button>}
-        <button className="btn" onClick={() => window.print()}>⎙ {t('game.print')}</button>
+        <button className="btn" onClick={() => setChoosingPrint(true)}>⎙ {t('game.print')}</button>
         <span style={{ flex: 1 }} />
         <button className="btn btn-danger" onClick={remove}>{t('game.delete')}</button>
       </div>
 
-      <div className="card scoreboard">
+      <div className={`card scoreboard${unprinted('score')}`}>
         <div className="scoreline">
           <div className="side-home"><div className="team">{teamName('home')}</div><div className="pts">{stats.teams.home.score}</div></div>
           <div className="muted">–</div>
@@ -98,7 +133,7 @@ export function GamePage() {
       </div>
 
       {SIDES.map(side => (
-        <div className="card" key={side}>
+        <div className={`card${unprinted('box', side)}`} key={side}>
           <h2>{teamName(side)}</h2>
           <StatTable
             firstCol={t('common.player')}
@@ -111,13 +146,13 @@ export function GamePage() {
           />
         </div>
       ))}
-      <p className="legend">{t('stat.legend')}</p>
+      <p className={`legend${unprinted('box')}`}>{t('stat.legend')}</p>
 
-      <div className="card">
+      <div className={`card${unprinted('shotChart')}`}>
         <h2>{t('game.shotChart')}</h2>
         <div className="grid-2">
           {SIDES.map(side => (
-            <div key={side}>
+            <div key={side} className={unprinted('shotChart', side)}>
               <h3>{teamName(side)}</h3>
               <ShotChart shots={shotsOf(events, e => e.side === side)} />
             </div>
@@ -125,15 +160,27 @@ export function GamePage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className={`card${unprinted('shotsByPeriod')}`}>
         <h2>{t('game.shotsByPeriod')}</h2>
         {SIDES.map(side => (
-          <div key={side}>
+          <div key={side} className={unprinted('shotsByPeriod', side)}>
             <h3>{teamName(side)}</h3>
             <PeriodShots events={events.filter(e => e.side === side)} periods={periods} side={side} />
           </div>
         ))}
       </div>
+
+      {printed('boxByPeriod') && (
+        <>
+          {Array.from({ length: periods }, (_, i) => (
+            <PeriodBoxScore
+              key={i} events={events} game={game} period={i + 1} sides={printChoice.sides} teamName={teamName} sidePlayers={sidePlayers}
+            />
+          ))}
+          {/* The legend otherwise comes with the game's box score */}
+          {!printed('box') && <p className="legend print-only">{t('stat.legend')}</p>}
+        </>
+      )}
 
       <div className="card no-print">
         <h2>{t('game.playByPlay')}</h2>
@@ -157,6 +204,14 @@ export function GamePage() {
           players={sidePlayersAll(teamPlayers ?? [], editing.side === 'home' ? game.homeTeamId : game.awayTeamId)}
           opponents={sidePlayersAll(teamPlayers ?? [], editing.side === 'home' ? game.awayTeamId : game.homeTeamId)}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {choosingPrint && (
+        <PrintDialog
+          initial={savedParts ? PRINT_PARTS.filter(p => savedParts.includes(p)) : [...PRINT_PARTS]}
+          teamName={teamName}
+          onPrint={print}
+          onClose={() => setChoosingPrint(false)}
         />
       )}
     </>
@@ -186,6 +241,90 @@ function PeriodShots({ events, periods, side }: { events: GameEvent[]; periods: 
           </figure>
         )
       })}
+    </div>
+  )
+}
+
+/** Choose which parts of the report, and which teams, go into the PDF */
+function PrintDialog({ initial, teamName, onPrint, onClose }: {
+  initial: PrintPart[]
+  teamName: (side: Side) => string
+  onPrint: (choice: PrintChoice) => void
+  onClose: () => void
+}) {
+  const { t } = useI18n()
+  const [parts, setParts] = useState(initial)
+  const [sides, setSides] = useState(SIDES)
+  const toggle = (part: PrintPart) => setParts(PRINT_PARTS.filter(p => (p === part) !== parts.includes(p)))
+  const sideChoices: Side[][] = [SIDES, ['home'], ['away']]
+
+  return (
+    <Modal
+      title={t('game.printTitle')}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="btn btn-primary" disabled={parts.length === 0} onClick={() => onPrint({ parts, sides })}>
+            ⎙ {t('game.print')}
+          </button>
+        </>
+      }
+    >
+      <div className="print-choices">
+        {PRINT_PARTS.map(part => (
+          <label key={part} className="inline">
+            <input type="checkbox" checked={parts.includes(part)} onChange={() => toggle(part)} />
+            {t(PRINT_PART_LABEL[part])}
+          </label>
+        ))}
+      </div>
+      <h3>{t('game.printTeams')}</h3>
+      <div className="print-choices">
+        {sideChoices.map(choice => (
+          <label key={choice.join()} className="inline">
+            <input type="radio" name="print-teams" checked={sides.join() === choice.join()} onChange={() => setSides(choice)} />
+            {choice.length > 1 ? t('game.printBothTeams') : teamName(choice[0])}
+          </label>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * One period's box score; the screen leaves it out, as it would be a long scroll.
+ * With both teams it takes a page of its own in the PDF, with one team two periods share a page.
+ */
+function PeriodBoxScore({ events, game, period, sides, teamName, sidePlayers }: {
+  events: GameEvent[]
+  game: Game
+  period: number
+  sides: Side[]
+  teamName: (side: Side) => string
+  sidePlayers: (side: Side) => Player[]
+}) {
+  const { t, lang } = useI18n()
+  const stats = computeGameStats(events, game, period)
+  // Players on court in the period, or with any stat in it
+  const tookPart = (id: number) => {
+    const line = stats.players.get(id)
+    return !!line && (line.ms > 0 || events.some(e =>
+      e.period === period && e.type !== 'SUB_IN' && e.type !== 'SUB_OUT' && (e.playerId === id || e.targetPlayerId === id)))
+  }
+  return (
+    <div className={`card print-only${sides.length > 1 ? ' print-break' : ''}`}>
+      <h2>{t('game.boxByPeriod')} · {periodLabel(period, lang)}</h2>
+      {sides.map(side => (
+        <div key={side}>
+          <h3>{teamName(side)}</h3>
+          <StatTable
+            firstCol={t('common.player')}
+            rows={sidePlayers(side).filter(p => tookPart(p.id!)).map(p => ({ key: p.id!, label: playerLabel(p), line: stats.players.get(p.id!)! }))}
+            total={{ key: 'total', label: t('common.totals'), line: stats.teams[side].totals }}
+          />
+        </div>
+      ))}
     </div>
   )
 }

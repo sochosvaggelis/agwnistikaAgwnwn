@@ -57,6 +57,18 @@ describe('minutesPlayed', () => {
   it('times overtime with its own length', () => {
     expect(minutesPlayed(starters, game({ period: 5 })).get(1)).toBe(45 * MIN)
   })
+
+  it('counts only the time within a period, for stints that carry over from earlier ones', () => {
+    const events = [...starters, sub('SUB_OUT', 5, 2, 4), sub('SUB_IN', 6, 2, 4), sub('SUB_OUT', 6, 3, 10), sub('SUB_IN', 5, 3, 10)]
+    const q2 = minutesPlayed(events, game(), { period: 2 })
+    expect(q2.get(1)).toBe(10 * MIN)
+    expect(q2.get(5)).toBe(6 * MIN)
+    expect(q2.get(6)).toBe(4 * MIN)
+    const q3 = minutesPlayed(events, game(), { period: 3 })
+    expect(q3.get(5)).toBe(10 * MIN)
+    expect(q3.get(6)).toBe(0)
+    expect(minutesPlayed(starters, game({ period: 5 }), { period: 5 }).get(1)).toBe(5 * MIN)
+  })
 })
 
 describe('computeGameStats minutes', () => {
@@ -67,6 +79,15 @@ describe('computeGameStats minutes', () => {
     // The other team has no lineup, and team totals leave minutes out
     expect(s.players.get(9)).toMatchObject({ ms: 0, msGames: 0 })
     expect(s.teams.home.totals).toMatchObject({ ms: 0, msGames: 0 })
+  })
+
+  it('counts one period, with the lineup carried over from earlier periods', () => {
+    const shot: GameEvent = { gameId: 1, seq: 99, group: 99, period: 2, side: 'home', playerId: 6, type: 'FG2', made: true, createdAt: 0 }
+    const q1Shot: GameEvent = { ...shot, seq: 98, group: 98, period: 1, playerId: 1 }
+    const s = computeGameStats([...starters, q1Shot, sub('SUB_OUT', 5, 2, 4), sub('SUB_IN', 6, 2, 4), shot], game(), 2)
+    expect(s.players.get(6)).toMatchObject({ pts: 2, ms: 4 * MIN })
+    expect(s.players.get(1)).toMatchObject({ pts: 0, ms: 10 * MIN })
+    expect(s.teams.home.score).toBe(2)
   })
 
   it('leaves minutes out without the whole game', () => {

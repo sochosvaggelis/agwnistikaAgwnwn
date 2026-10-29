@@ -1,5 +1,5 @@
 import type { Game, GameEvent, Side } from '../db/types'
-import { currentClockMs, gameElapsedMs } from './rules'
+import { currentClockMs, gameElapsedMs, periodLengthMs } from './rules'
 
 export type GameTiming = Pick<Game, 'periodLengthMin' | 'otLengthMin' | 'status' | 'period' | 'clockEnabled' | 'clockMs' | 'clockRunningSince'>
 
@@ -21,13 +21,20 @@ export function lineups(events: GameEvent[]): Record<Side, number[] | null> {
  * Time on court for each player who entered the game. A stint whose start or end has no time makes
  * the player's total unknown (null). Players still on court count until the end of the last period
  * once the game is over, or until the clock now while it is live; without a clock that end is unknown.
+ * With a period, only the time on court within it counts.
  */
-export function minutesPlayed(events: GameEvent[], game: GameTiming, now = Date.now()): Map<number, number | null> {
+export function minutesPlayed(
+  events: GameEvent[], game: GameTiming, { now = Date.now(), period }: { now?: number; period?: number } = {},
+): Map<number, number | null> {
   const total = new Map<number, number | null>()
   const since = new Map<number, number | null>()
+  const windowStart = period == null ? -Infinity : gameElapsedMs(game, period, periodLengthMs(game, period))
+  const windowEnd = period == null ? Infinity : gameElapsedMs(game, period, 0)
   const add = (id: number, from: number | null, to: number | null) => {
     const prev = total.has(id) ? total.get(id)! : 0
-    total.set(id, prev == null || from == null || to == null ? null : prev + Math.max(0, to - from))
+    total.set(id, prev == null || from == null || to == null
+      ? null
+      : prev + Math.max(0, Math.min(to, windowEnd) - Math.max(from, windowStart)))
   }
 
   for (const ev of events) {

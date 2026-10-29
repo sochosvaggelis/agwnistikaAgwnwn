@@ -170,8 +170,8 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: var(--ring); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 textarea { min-height: 80px; resize: vertical; }
-input[type='checkbox'] { width: 22px; height: 22px; min-height: 0; accent-color: var(--primary); }
-input[type='checkbox']:focus { box-shadow: none; }
+input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; min-height: 0; accent-color: var(--primary); }
+input[type='checkbox']:focus, input[type='radio']:focus { box-shadow: none; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
 label.inline { flex-direction: row; align-items: center; gap: 10px; color: var(--text); font-size: 1rem; font-weight: 400; }
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
@@ -459,7 +459,10 @@ table { border-collapse: collapse; width: 100%; }
 }
 
 /* ---------- print (PDF) ---------- */
+.print-only { display: none; }
+
 @media print {
+  .print-only { display: block; }
   @page { size: A4 landscape; margin: 8mm; }
   :root {
     --bg: #fff; --surface: #fff; --surface-2: #fff; --text: #000; --muted: #444; --border: #bbb; --border-strong: #666;
@@ -480,4 +483,6 @@ table { border-collapse: collapse; width: 100%; }
 }
 
 .roster-check { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.print-choices { display: grid; gap: 2px; }
+.print-choices > label.inline { min-height: 44px; }
 .form-row > label.inline { flex: 0 0 auto; min-height: 44px; }

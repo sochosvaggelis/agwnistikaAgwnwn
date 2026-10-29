@@ -105,8 +105,11 @@ const SHOT_KEYS = {
   FT: [1, 'fta', 'ftm'],
 } as const
 
-/** With the whole game, players of a team that tracks its lineup also get their time on court. */
-export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'> | Game): GameStats {
+/**
+ * With the whole game, players of a team that tracks its lineup also get their time on court.
+ * With a period, only what happened in it counts; pass all the game's events, since a lineup carries over from earlier periods.
+ */
+export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'> | Game, period?: number): GameStats {
   const players = new Map<number, StatLine>()
   const playerSide = new Map<number, Side>()
   const teams: Record<Side, TeamGameStats> = { home: emptyTeam(), away: emptyTeam() }
@@ -131,6 +134,7 @@ export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'
   }
 
   for (const ev of events) {
+    if (period != null && ev.period !== period) continue
     const team = teams[ev.side]
     if (ev.type === 'COACH_FOUL') {
       if (ev.coachFoulType) team.coachFouls[ev.coachFoulType]++
@@ -174,7 +178,7 @@ export function computeGameStats(events: GameEvent[], game?: Pick<Game, 'roster'
 
   if (game && 'status' in game) {
     const tracked = lineups(events)
-    const minutes = minutesPlayed(events, game)
+    const minutes = minutesPlayed(events, game, { period })
     for (const [id, l] of players) {
       if (!tracked[playerSide.get(id)!]) continue
       // A player of the team who never entered played no time
