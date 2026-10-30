@@ -478,7 +478,8 @@ table { border-collapse: collapse; width: 100%; }
   .stat-table { font-size: 9px; }
   .stat-table th, .stat-table td { padding: 2px 4px; }
   .shot-chart-wrap { container-type: normal; }
-  .shot-chart { max-width: 240px; }
+  /* Each team's court close to half the page wide, still leaving room under it for the zone table */
+  .shot-chart { max-width: 130mm; }
   .print-break { break-before: page; }
 }
 
