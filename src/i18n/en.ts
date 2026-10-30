@@ -262,6 +262,7 @@ export const en = {
   'shots.heatNote': "Color: the zone's shooting against 50% on twos and 33% on threes (1 point per shot)",
 
   'stats.allGames': 'All games',
+  'stats.overtimes': 'Overtimes',
   'stats.title': 'Team stats',
   'stats.pointsFor': 'Points for',
   'stats.pointsAgainst': 'Points against',

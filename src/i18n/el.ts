@@ -265,6 +265,7 @@ export const el: Record<TKey, string> = {
 
   'stats.title': 'Στατιστικά ομάδας',
   'stats.allGames': 'Όλοι οι αγώνες',
+  'stats.overtimes': 'Παρατάσεις',
   'stats.pointsFor': 'Πόντοι υπέρ',
   'stats.pointsAgainst': 'Πόντοι κατά',
   'stats.leaders': 'Κορυφαίοι',

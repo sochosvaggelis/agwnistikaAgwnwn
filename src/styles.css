@@ -350,6 +350,12 @@ table { border-collapse: collapse; width: 100%; }
   .shot-chart { grid-template-columns: minmax(0, 440px) minmax(0, 320px); gap: 24px; max-width: none; align-items: start; }
 }
 .shot-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+/* Team stats: a shot chart per quarter, two to a row */
+.quarter-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+.quarter-charts h3 { margin-top: 8px; }
+@media (max-width: 760px) {
+  .quarter-charts { grid-template-columns: minmax(0, 1fr); }
+}
 /* A floor-colored gap separates neighboring zones */
 .zone-cell { stroke: var(--court-floor); stroke-width: 3; vector-effect: non-scaling-stroke; }
 .zone-label { font-size: 0.62px; font-weight: 800; fill: var(--text); text-anchor: middle; font-variant-numeric: tabular-nums; }

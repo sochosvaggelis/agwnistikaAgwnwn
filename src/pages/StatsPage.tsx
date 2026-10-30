@@ -11,8 +11,11 @@ import { aggregatePlayers, aggregateTeam, type PlayerAgg } from '../stats/aggreg
 import { pir, reb, shotsOf, type StatLine } from '../stats/compute'
 import { playerLabel } from '../db/repo'
 import { fmtDate } from '../format'
-import { opposite } from '../stats/rules'
+import { isOvertime, opposite, periodLabel, REGULATION_PERIODS } from '../stats/rules'
 import type { Player } from '../db/types'
+
+/** Stands for all the overtimes together in the shots by quarter */
+const OVERTIMES = REGULATION_PERIODS + 1
 
 export function StatsPage() {
   const { t, lang } = useI18n()
@@ -37,7 +40,9 @@ export function StatsPage() {
   const scoped = games && gameId != null ? games.filter(gd => gd.game.id === gameId) : games
   const team = scoped ? aggregateTeam(scoped, sideOf) : null
   const aggs = scoped ? aggregatePlayers(scoped, sideOf) : []
-  const shots = scoped ? scoped.flatMap(gd => shotsOf(gd.events, e => e.side === sideOf(gd))) : []
+  const shotsIn = (inPeriod: (period: number) => boolean) =>
+    (scoped ?? []).flatMap(gd => shotsOf(gd.events, e => e.side === sideOf(gd) && inPeriod(e.period)))
+  const shots = shotsIn(() => true)
 
   const gameLabel = (gd: NonNullable<typeof games>[number]) => {
     const side = sideOf(gd) ?? 'home'
@@ -119,6 +124,19 @@ export function StatsPage() {
           <div className="card">
             <h2>{t('game.shotChart')}</h2>
             <ShotChart shots={shots} controls />
+          </div>
+
+          {/* The same chart per quarter, each with its own controls; the overtimes share one */}
+          <div className="card">
+            <h2>{t('game.shotsByPeriod')}</h2>
+            <div className="quarter-charts">
+              {[1, 2, 3, 4, ...((scoped ?? []).some(gd => gd.events.some(e => isOvertime(e.period))) ? [OVERTIMES] : [])].map(period => (
+                <section key={period}>
+                  <h3>{period === OVERTIMES ? t('stats.overtimes') : periodLabel(period, lang)}</h3>
+                  <ShotChart shots={shotsIn(p => (period === OVERTIMES ? isOvertime(p) : p === period))} controls />
+                </section>
+              ))}
+            </div>
           </div>
         </>
       )}
