@@ -54,6 +54,8 @@ export function GamePage() {
   // What the last PDF had; printing from the browser menu prints the same
   const [printChoice, setPrintChoice] = useState<PrintChoice>({ parts: [...PRINT_PARTS], sides: SIDES })
   const [choosingPrint, setChoosingPrint] = useState(false)
+  // One player per team, or none, to narrow the play-by-play to
+  const [pbpPlayer, setPbpPlayer] = useState<Partial<Record<Side, number>>>({})
 
   const playerMap = useMemo(() => new Map((teamPlayers ?? []).map(p => [p.id!, p])), [teamPlayers])
   const stats = useMemo(() => (game && events ? computeGameStats(events, game) : null), [game, events])
@@ -88,6 +90,11 @@ export function GamePage() {
   const unprinted = (part: PrintPart, side?: Side) =>
     printChoice.parts.includes(part) && (side == null || printChoice.sides.includes(side)) ? '' : ' no-print'
   const printed = (part: PrintPart) => printChoice.parts.includes(part)
+
+  // The chosen players' own events, and those done to them (fouled, blocked)
+  const pbpIds = SIDES.map(side => pbpPlayer[side]).filter((pid): pid is number => pid != null)
+  const pbpEvents = pbpIds.length === 0 ? events : events.filter(e =>
+    (e.playerId != null && pbpIds.includes(e.playerId)) || (e.targetPlayerId != null && pbpIds.includes(e.targetPlayerId)))
 
   return (
     <>
@@ -184,10 +191,26 @@ export function GamePage() {
 
       <div className="card no-print">
         <h2>{t('game.playByPlay')}</h2>
-        {events.length === 0 && <p className="muted">{t('common.noData')}</p>}
-        {events.map((ev, i) => (
+        {events.length > 0 && (
+          <div className="filter-bar">
+            {SIDES.map(side => (
+              <label key={side}>
+                {teamName(side)}
+                <select
+                  value={pbpPlayer[side] ?? ''}
+                  onChange={e => setPbpPlayer({ ...pbpPlayer, [side]: e.target.value ? Number(e.target.value) : undefined })}
+                >
+                  <option value="">{t('game.allPlayers')}</option>
+                  {sidePlayers(side).map(p => <option key={p.id} value={p.id}>{playerLabel(p)}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+        )}
+        {pbpEvents.length === 0 && <p className="muted">{t('common.noData')}</p>}
+        {pbpEvents.map((ev, i) => (
           <div key={ev.id}>
-            {(i === 0 || events[i - 1].period !== ev.period) && <div className="pbp-period">{periodLabel(ev.period, lang)}</div>}
+            {(i === 0 || pbpEvents[i - 1].period !== ev.period) && <div className="pbp-period">{periodLabel(ev.period, lang)}</div>}
             <div className="pbp-row">
               <span className="log-period">{ev.clockMs != null ? formatClock(ev.clockMs) : ''}</span>
               <span className={`log-text side-${ev.side}`}>{describeEvent(ev, playerMap, t)}</span>

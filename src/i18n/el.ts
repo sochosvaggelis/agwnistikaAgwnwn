@@ -227,6 +227,7 @@ export const el: Record<TKey, string> = {
 
   'game.boxScore': 'Στατιστικά αγώνα',
   'game.playByPlay': 'Φάση-φάση',
+  'game.allPlayers': 'Όλοι οι παίκτες',
   'game.shotChart': 'Χάρτης σουτ',
   'game.shotsByPeriod': 'Σουτ ανά περίοδο',
   'game.boxByPeriod': 'Στατιστικά ανά περίοδο',
