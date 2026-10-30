@@ -22,6 +22,8 @@ export interface Team {
   id?: number
   name: string
   isMine: boolean
+  /** Up to two colors as #rrggbb, main one first; read them with teamColors() */
+  colors?: string[]
   createdAt: number
 }
 

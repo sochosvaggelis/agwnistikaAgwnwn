@@ -4,6 +4,7 @@ import type { Competition, Game, GameEvent, Player, Side } from './types'
 import { availableKinds, competitionKind, sameName } from './competitions'
 import type { Draft } from '../live/flow'
 import { currentClockMs, DEFAULT_OT_MIN, DEFAULT_PERIOD_MIN, periodLengthMs } from '../stats/rules'
+import { isHexColor, MAX_TEAM_COLORS } from '../teamColors'
 
 const now = () => Date.now()
 
@@ -84,6 +85,12 @@ export async function setMyTeam(id: number) {
     await clearMyTeam()
     await db.teams.update(id, { isMine: true })
   })
+}
+
+/** Up to two colors, main one first; none clears them */
+export async function setTeamColors(id: number, colors: (string | undefined)[]) {
+  const valid = [...new Set(colors.filter(isHexColor).map(c => c.toLowerCase()))].slice(0, MAX_TEAM_COLORS)
+  await db.teams.update(id, { colors: valid.length ? valid : undefined })
 }
 
 export async function deleteTeam(id: number) {

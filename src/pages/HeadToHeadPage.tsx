@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { useI18n } from '../i18n'
 import { mySideOf, useById, useGamesData, useMyTeam, usePlayers, useTeams, type GameData } from '../hooks'
@@ -6,6 +6,7 @@ import { SeasonFilter, useSeasonFilter } from '../components/SeasonFilter'
 import { StatTable } from '../components/StatTable'
 import { ModeToggle } from '../components/ModeToggle'
 import { ResultBadge } from '../components/ResultBadge'
+import { TeamName } from '../components/TeamSwatch'
 import { aggregatePlayers, aggregateTeam } from '../stats/aggregate'
 import { opposite } from '../stats/rules'
 import { playerLabel } from '../db/repo'
@@ -35,11 +36,11 @@ export function HeadToHeadPage() {
     return (
       <>
         <div className="page-head">
-          <h1>{myTeam.name} {t('common.vs')} {opp?.name}</h1>
+          <h1><TeamName team={myTeam} /> {t('common.vs')} <TeamName team={opp} /></h1>
           <Link className="btn" to="/h2h">‹ {t('h2h.title')}</Link>
         </div>
         <SeasonFilter filter={filter} />
-        <Matchup games={vs} myId={myId!} sideOf={sideOf} oppName={opp?.name ?? ''} myName={myTeam.name} />
+        <Matchup games={vs} myId={myId!} sideOf={sideOf} oppName={<TeamName team={opp} />} myName={<TeamName team={myTeam} />} />
       </>
     )
   }
@@ -58,7 +59,7 @@ export function HeadToHeadPage() {
             return (
               <li key={o.id}>
                 <Link className="list-row" to={`/h2h/${o.id}`}>
-                  <span className="grow">{o.name}</span>
+                  <span className="grow"><TeamName team={o} /></span>
                   <span className="muted">{t('h2h.games')}: {rec.gp}</span>
                   <b>{rec.wins}–{rec.losses}</b>
                   <span>›</span>
@@ -76,8 +77,8 @@ function Matchup({ games, myId, sideOf, oppName, myName }: {
   games: GameData[]
   myId: number
   sideOf: (gd: GameData) => 'home' | 'away' | null
-  oppName: string
-  myName: string
+  oppName: ReactNode
+  myName: ReactNode
 }) {
   const { t, lang } = useI18n()
   const players = useById(usePlayers())

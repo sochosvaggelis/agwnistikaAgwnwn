@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -15,6 +15,8 @@ import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
 import { describeEvent } from '../live/describe'
 import { fmtDate, fmtPct } from '../format'
+import { TeamName } from '../components/TeamSwatch'
+import { teamColorVars } from '../teamColors'
 
 const SIDES: Side[] = ['home', 'away']
 
@@ -59,11 +61,12 @@ export function GamePage() {
 
   const playerMap = useMemo(() => new Map((teamPlayers ?? []).map(p => [p.id!, p])), [teamPlayers])
   const stats = useMemo(() => (game && events ? computeGameStats(events, game) : null), [game, events])
+  const colorVars = useMemo(() => teamColorVars(teams?.[0], teams?.[1]), [teams])
 
   if (game === undefined || events === undefined) return null
   if (!game || !stats) return <p>{t('game.notFound')}</p>
 
-  const teamName = (side: Side) => teams?.[side === 'home' ? 0 : 1]?.name ?? ''
+  const teamName = (side: Side) => <TeamName team={teams?.[side === 'home' ? 0 : 1]} />
   const periods = Math.max(REGULATION_PERIODS, game.period, ...events.map(e => e.period))
   const sidePlayers = (side: Side) =>
     sortPlayers([...stats.playerSide].filter(([, s]) => s === side).map(([pid]) => playerMap.get(pid)).filter((p): p is Player => !!p))
@@ -97,7 +100,7 @@ export function GamePage() {
     (e.playerId != null && pbpIds.includes(e.playerId)) || (e.targetPlayerId != null && pbpIds.includes(e.targetPlayerId)))
 
   return (
-    <>
+    <div className="team-colors" style={colorVars}>
       <div className="btn-row no-print" style={{ marginBottom: 12 }}>
         {game.status === 'live'
           ? <Link className="btn btn-primary" to={`/games/${gameId}/live`}>▶ {t('game.continue')}</Link>
@@ -237,7 +240,7 @@ export function GamePage() {
           onClose={() => setChoosingPrint(false)}
         />
       )}
-    </>
+    </div>
   )
 }
 
@@ -271,7 +274,7 @@ function PeriodShots({ events, periods, side }: { events: GameEvent[]; periods: 
 /** Choose which parts of the report, and which teams, go into the PDF */
 function PrintDialog({ initial, teamName, onPrint, onClose }: {
   initial: PrintPart[]
-  teamName: (side: Side) => string
+  teamName: (side: Side) => ReactNode
   onPrint: (choice: PrintChoice) => void
   onClose: () => void
 }) {
@@ -324,7 +327,7 @@ function PeriodBoxScore({ events, game, period, sides, teamName, sidePlayers }: 
   game: Game
   period: number
   sides: Side[]
-  teamName: (side: Side) => string
+  teamName: (side: Side) => ReactNode
   sidePlayers: (side: Side) => Player[]
 }) {
   const { t, lang } = useI18n()

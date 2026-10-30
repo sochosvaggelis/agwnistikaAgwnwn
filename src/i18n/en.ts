@@ -81,6 +81,12 @@ export const en = {
   'teams.quickAdd': 'Quick add',
   'teams.quickAddHint': 'Numbers and names, separated by commas: 4, 7 Papadopoulos, 9, 12 Ioannou — or just numbers: 4 5 7 9',
   'teams.rename': 'Rename',
+  'teams.colors': 'Colors',
+  'teams.color1': 'Main color',
+  'teams.color2': 'Second color',
+  'teams.colorCustom': 'Other color',
+  'teams.colorsHint': 'The team is shown in these colors everywhere: scores, rosters, play-by-play and the PDF. Where a color would be hard to read, or both teams in a game look alike, the other color or a default one is used.',
+  'teams.colorsPreview': 'How it looks',
 
   'newGame.title': 'New game',
   'newGame.needMyTeam': 'Create your team first.',

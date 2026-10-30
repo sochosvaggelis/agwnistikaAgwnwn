@@ -6,6 +6,7 @@ import { SeasonFilter, useSeasonFilter } from '../components/SeasonFilter'
 import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
 import { ModeToggle } from '../components/ModeToggle'
+import { TeamName } from '../components/TeamSwatch'
 import { aggregatePlayers, aggregateTeam, type PlayerAgg } from '../stats/aggregate'
 import { pir, reb, shotsOf, type StatLine } from '../stats/compute'
 import { playerLabel } from '../db/repo'
@@ -48,7 +49,7 @@ export function StatsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>{t('stats.title')} — {myTeam.name}</h1>
+        <h1>{t('stats.title')} — <TeamName team={myTeam} /></h1>
       </div>
       <SeasonFilter filter={filter}>
         <label>

@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '../i18n'
 import { db } from '../db/db'
-import type { Player } from '../db/types'
-import { addPlayer, addPlayersQuick, deleteTeam, setMyTeam, sortPlayers } from '../db/repo'
+import type { Player, Team } from '../db/types'
+import { addPlayer, addPlayersQuick, deleteTeam, setMyTeam, setTeamColors, sortPlayers } from '../db/repo'
+import { PRESET_COLORS, teamColors, teamColorVars } from '../teamColors'
+import { TeamName, TeamSwatch } from '../components/TeamSwatch'
 
 export function TeamPage() {
   const { id } = useParams()
@@ -43,7 +45,7 @@ export function TeamPage() {
   return (
     <>
       <div className="page-head">
-        <h1>{team.name} {team.isMine && <span className="badge">{t('teams.myTeam')}</span>}</h1>
+        <h1><TeamSwatch team={team} />{team.name} {team.isMine && <span className="badge">{t('teams.myTeam')}</span>}</h1>
         <div className="btn-row">
           <button className="btn" onClick={rename}>{t('teams.rename')}</button>
           {!team.isMine && <Link className="btn" to={`/h2h/${teamId}`}>{t('nav.h2h')}</Link>}
@@ -75,6 +77,8 @@ export function TeamPage() {
         </table>
       </div>
 
+      <TeamColors team={team} />
+
       <div className="card">
         <h2>{t('teams.quickAdd')}</h2>
         <p className="hint">{t('teams.quickAddHint')}</p>
@@ -86,6 +90,80 @@ export function TeamPage() {
         </div>
       </div>
     </>
+  )
+}
+
+/** The team's two colors, each optional; clearing the main color moves the second one up */
+function TeamColors({ team }: { team: Team }) {
+  const { t } = useI18n()
+  const [main, second] = teamColors(team)
+  const save = (colors: (string | undefined)[]) => setTeamColors(team.id!, colors)
+
+  return (
+    <div className="card">
+      <h2>{t('teams.colors')}</h2>
+      <p className="hint">{t('teams.colorsHint')}</p>
+      <ColorPicker label={t('teams.color1')} value={main} onChange={c => save([c, second])} />
+      <ColorPicker label={t('teams.color2')} value={second} disabled={!main} onChange={c => save([main, c])} />
+      {main && (
+        <div className="color-row">
+          <span className="color-row-label">{t('teams.colorsPreview')}</span>
+          {/* The team as the home side of a game, on a light card and on the scoreboard */}
+          <div className="colors-preview team-colors" style={teamColorVars(team)}>
+            <span className="colors-preview-card">
+              <b className="colors-preview-name"><TeamName team={team} /></b>
+              <span className="colors-preview-chip">#7</span>
+            </span>
+            <span className="colors-preview-bar"><b>72</b></span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ColorPicker({ label, value, disabled, onChange }: {
+  label: string
+  value?: string
+  disabled?: boolean
+  onChange: (color: string | undefined) => void
+}) {
+  const { t } = useI18n()
+  const custom = useRef<HTMLInputElement>(null)
+  // The native change event fires once the picker closes; React's onChange would save every step of a drag
+  useEffect(() => {
+    const el = custom.current
+    if (!el) return
+    const commit = () => onChange(el.value)
+    el.addEventListener('change', commit)
+    return () => el.removeEventListener('change', commit)
+  }, [onChange])
+  useEffect(() => {
+    if (custom.current && value) custom.current.value = value
+  }, [value])
+  const isCustom = !!value && !PRESET_COLORS.includes(value)
+
+  return (
+    <div className="color-row">
+      <span className="color-row-label">{label}</span>
+      <div className="color-choices" role="group" aria-label={label}>
+        {PRESET_COLORS.map(c => (
+          <button
+            key={c}
+            className={`color-choice${c === value ? ' on' : ''}`}
+            style={{ background: c }}
+            disabled={disabled}
+            aria-label={c}
+            aria-pressed={c === value}
+            onClick={() => onChange(c)}
+          />
+        ))}
+        <label className={`color-choice color-custom${isCustom ? ' on' : ''}`} style={isCustom ? { background: value } : undefined}>
+          <input ref={custom} type="color" defaultValue={value ?? '#808080'} disabled={disabled} aria-label={t('teams.colorCustom')} />
+        </label>
+        <button className="btn btn-sm" disabled={disabled || !value} onClick={() => onChange(undefined)}>{t('common.none')}</button>
+      </div>
+    </div>
   )
 }
 

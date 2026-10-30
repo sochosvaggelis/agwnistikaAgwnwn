@@ -17,9 +17,7 @@
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
-  /* A scoreboard: lighter team colors so the scores read on navy */
-  --home: #8ab8ff;
-  --away: #ffab70;
+  /* A scoreboard: the side colors are the dark-background ones (see .team-colors) */
   --muted: rgb(255 255 255 / 0.65);
   background: linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 100%);
   color: #fff;
@@ -58,8 +56,9 @@
   background: rgb(0 0 0 / 0.28);
   white-space: nowrap;
 }
-.side-home .team-fouls { --foul: var(--home); }
-.side-away .team-fouls { --foul: var(--away); }
+/* The team's color, unless it would look like the red 5th light */
+.side-home .team-fouls { --foul: var(--home-foul); }
+.side-away .team-fouls { --foul: var(--away-foul); }
 /* The 5th foul, the first one with free throws, lights red */
 .foul-box:nth-of-type(5) { --foul: #ff4d4d; }
 .foul-box {
@@ -204,9 +203,10 @@
 .player-btn.dq { background: repeating-linear-gradient(135deg, var(--surface) 0 8px, var(--danger-soft) 8px 16px); }
 .player-btn.dq .pfouls { color: var(--danger); font-weight: 800; letter-spacing: 0; }
 
-.side-home .player-btn.selected { background: var(--home); color: #fff; }
-.side-away .player-btn.selected { background: var(--away); color: #fff; }
-.player-btn.selected .pnum, .player-btn.selected .pline { color: #fff; }
+.side-home .player-btn.selected { background: var(--home); color: var(--home-on); }
+.side-away .player-btn.selected { background: var(--away); color: var(--away-on); }
+/* The fouls' warning colors would clash with whatever color the team has */
+.player-btn.selected .pnum, .player-btn.selected .pline, .player-btn.selected .pfouls { color: inherit; }
 
 .roster.picking .player-btn.eligible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .player-btn.ineligible { opacity: 0.3; }

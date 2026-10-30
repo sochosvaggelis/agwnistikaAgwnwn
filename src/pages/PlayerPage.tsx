@@ -9,6 +9,7 @@ import { SeasonFilter, useSeasonFilter } from '../components/SeasonFilter'
 import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
 import { ModeToggle } from '../components/ModeToggle'
+import { TeamName } from '../components/TeamSwatch'
 import { shotsOf, sumLines } from '../stats/compute'
 import { opposite } from '../stats/rules'
 import { fmtDate } from '../format'
@@ -41,7 +42,7 @@ export function PlayerPage() {
           {playerLabel(player)}
           {player.position && <span className="muted"> · {player.position}</span>}
         </h1>
-        {team && <Link className="btn" to={`/teams/${team.id}`}>{team.name}</Link>}
+        {team && <Link className="btn" to={`/teams/${team.id}`}><TeamName team={team} /></Link>}
       </div>
       <SeasonFilter filter={filter} />
 
@@ -75,7 +76,7 @@ export function PlayerPage() {
                   key: gd.game.id!,
                   label: (
                     <Link to={`/games/${gd.game.id}`}>
-                      {fmtDate(gd.game.date, lang)} {side === 'home' ? t('common.vs') : t('common.at')} {teams.get(oppId)?.name}{' '}
+                      {fmtDate(gd.game.date, lang)} {side === 'home' ? t('common.vs') : t('common.at')} <TeamName team={teams.get(oppId)} />{' '}
                       <span className="muted">{us}–{them}</span>
                     </Link>
                   ),

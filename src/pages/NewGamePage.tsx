@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '../i18n'
@@ -8,6 +8,7 @@ import { availableKinds, COMPETITION_KINDS, DEFAULT_KINDS } from '../db/competit
 import type { CompetitionKind, Player, Side } from '../db/types'
 import { useCompetitions, useDefaultCompetitions, useKindName, useMyTeam, useSeasons, useTeams } from '../hooks'
 import { todayISO } from '../format'
+import { TeamName } from '../components/TeamSwatch'
 import { DEFAULT_PERIOD_MIN } from '../stats/rules'
 
 const NEW = 'new'
@@ -180,10 +181,10 @@ export function NewGamePage() {
       </div>
 
       <div className="grid-2">
-        <RosterPicker title={myTeam.name} players={myPlayers} selected={myRoster} onChange={setMyRoster} teamId={myTeam.id!} />
+        <RosterPicker title={<TeamName team={myTeam} />} players={myPlayers} selected={myRoster} onChange={setMyRoster} teamId={myTeam.id!} />
         {oppId !== NEW && (
           <RosterPicker
-            title={opponents.find(o => String(o.id) === oppId)?.name ?? ''}
+            title={<TeamName team={opponents.find(o => String(o.id) === oppId)} />}
             players={oppPlayers}
             selected={oppRoster}
             onChange={setOppRoster}
@@ -231,7 +232,7 @@ function useDefaultSelection(players: Player[] | undefined) {
 }
 
 function RosterPicker({ title, players, selected, onChange, teamId }: {
-  title: string
+  title: ReactNode
   players: Player[] | undefined
   selected: Set<number> | null
   onChange: (s: Set<number>) => void

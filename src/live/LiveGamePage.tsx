@@ -24,6 +24,8 @@ import { ZoneLayer } from '../components/ZoneLayer'
 import { courtZoneSplits } from '../stats/zones'
 import { Modal } from '../components/Modal'
 import { StatTable } from '../components/StatTable'
+import { TeamName } from '../components/TeamSwatch'
+import { teamColorVars } from '../teamColors'
 import { describeEvent, describeShort, groupEvents } from './describe'
 import './live.css'
 
@@ -275,7 +277,8 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  const teamName = (side: Side) => teams?.[side === 'home' ? 0 : 1]?.name ?? ''
+  const team = (side: Side) => teams?.[side === 'home' ? 0 : 1]
+  const colorVars = useMemo(() => teamColorVars(teams?.[0], teams?.[1]), [teams])
   const groups = useMemo(() => groupEvents(events), [events])
   const lastGroupText = groups[0]?.map(e => {
     const d = describeShort(e, playerMap, t)
@@ -283,7 +286,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   }).join(' · ')
 
   return (
-    <div className="live">
+    <div className="live team-colors" style={colorVars}>
       <header className="live-top">
         <button className="btn btn-ghost" onClick={exitGame}>‹ {t('live.exit')}</button>
         <TeamScore side="home" stats={stats} period={game.period} />
@@ -311,7 +314,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
 
       <div className="live-body">
         <RosterColumn
-          side="home" name={teamName('home')} players={roster.home} lineup={lineup.home} stats={stats} shots={shots.home} step={step}
+          side="home" team={team('home')} players={roster.home} lineup={lineup.home} stats={stats} shots={shots.home} step={step}
           period={game.period} shown={courtPeriods.home} chosenFg={chosenFg}
           onShown={f => setCourtPeriods(p => ({ ...p, home: f }))}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'home', x, y })}
@@ -322,7 +325,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
         />
         <CenterPanel step={step} dispatch={dispatch} onBack={goBack} playerMap={playerMap} groups={groups} ctx={ctx} />
         <RosterColumn
-          side="away" name={teamName('away')} players={roster.away} lineup={lineup.away} stats={stats} shots={shots.away} step={step}
+          side="away" team={team('away')} players={roster.away} lineup={lineup.away} stats={stats} shots={shots.away} step={step}
           period={game.period} shown={courtPeriods.away} chosenFg={chosenFg}
           onShown={f => setCourtPeriods(p => ({ ...p, away: f }))}
           onCourt={(x, y) => dispatch({ t: 'court', side: 'away', x, y })}
@@ -365,7 +368,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
         <Modal title={t('live.boxScore')} onClose={() => setModal(null)} wide>
           {SIDES.map(side => (
             <section key={side}>
-              <h3>{teamName(side)} — {stats.teams[side].score}</h3>
+              <h3><TeamName team={team(side)} /> — {stats.teams[side].score}</h3>
               <StatTable
                 firstCol={t('common.player')}
                 rows={roster[side].map(p => ({ key: p.id!, label: playerLabel(p), line: stats.players.get(p.id!)! }))}
@@ -432,7 +435,7 @@ function TeamScore({ side, stats, period }: { side: Side; stats: GameStats; peri
 
 interface RosterProps {
   side: Side
-  name: string
+  team?: Team
   players: Player[]
   /** Players on the court, or null while the team has no starting five */
   lineup: number[] | null
@@ -452,7 +455,7 @@ interface RosterProps {
 }
 
 function RosterColumn({
-  side, name, players: roster, lineup, stats, shots, step, period, shown, chosenFg, onShown, onCourt, onPlayer, onCoach, onAdd, onSub,
+  side, team, players: roster, lineup, stats, shots, step, period, shown, chosenFg, onShown, onCourt, onPlayer, onCoach, onAdd, onSub,
 }: RosterProps) {
   const { t, lang } = useI18n()
   // Once the team has a lineup, only the players on the court are shown
@@ -476,7 +479,7 @@ function RosterColumn({
 
   return (
     <div className={`roster side-${side}${picking ? ' picking' : ''}`}>
-      <div className="roster-name">{name}</div>
+      <div className="roster-name"><TeamName team={team} /></div>
       <div className="live-court-area">
         {/* The court shows only this player's shots */}
         {selected && (
@@ -837,7 +840,7 @@ function AddPlayerModal({ team, onClose, onAdd }: { team?: Team; onClose: () => 
   const [name, setName] = useState('')
   return (
     <Modal
-      title={`${t('teams.addPlayer')}${team ? ` — ${team.name}` : ''}`}
+      title={<>{t('teams.addPlayer')}{team && <> — <TeamName team={team} /></>}</>}
       onClose={onClose}
       footer={<button className="btn btn-primary" disabled={!number && !name} onClick={() => onAdd(number, name)}>{t('common.add')}</button>}
     >
@@ -896,7 +899,7 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
 
   return (
     <Modal
-      title={`${t(starting ? 'live.startingFive' : 'live.sub')}${team ? ` — ${team.name}` : ''}`}
+      title={<>{t(starting ? 'live.startingFive' : 'live.sub')}{team && <> — <TeamName team={team} /></>}</>}
       onClose={onClose}
       wide
       footer={

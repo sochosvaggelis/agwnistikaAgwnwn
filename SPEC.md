@@ -17,6 +17,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Shot entry | Court spot → player → action; each team has its own half court, always shown above its roster on the live screen with the team's shots so far (made/missed, like the game report); a Heatmap button next to each court switches that court to the zone heatmap; below it, quarter buttons (All, 1st–4th, and one button for all overtimes once there is one) show only that quarter's shots, on the heatmap too (added 2026-10-22); while a player is chosen for a play, their court shows only that player's shots, with their number and FG made/attempts beside it (changed 2026-10-22) |
 | Chaining | Skippable follow-up prompts (see Input flow) |
 | Opponents | Saved reusable teams, or create one at game time and keep it |
+| Team colors | Each team has up to two optional colors, set on its page (added 2026-10-30). A swatch of them goes next to the team's name everywhere, and in a game each side is shown in its team's color instead of the fixed home blue / away orange: scores, rosters, team-foul lights, play-by-play, the PDF. Where a color doesn't read on the background (light, dark theme, navy scoreboard), the team's other color is used if the main one is white, gray or black, else the main one made darker or lighter. When both teams' colors look alike, my team (else the home team) keeps its own and the other team takes its other color, else a default. Team-foul lights never look like the red 5th light |
 | Fouls | Type: personal / shooting / offensive / technical / unsportsmanlike + fouled player |
 | Extras | Coach/bench technicals, FIBA PIR (exact, via prompts) |
 | Not tracked | Timeouts, team rebounds/turnovers, possession arrow |
@@ -62,7 +63,7 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 
 - `seasons` {id, name}
 - `competitions` {id, seasonId, kind?: league|cup|friendly|other, name} (kind is missing on older records and inferred from the name)
-- `teams` {id, name, isMine}
+- `teams` {id, name, isMine, colors?: up to two #rrggbb, main first}
 - `players` {id, teamId, name, number, position?, active}
 - `games` {id, competitionId, date, homeTeamId, awayTeamId, clockEnabled, status: draft|live|finished, roster: {home: playerId[], away: playerId[]}}
 - `events` {id, gameId, seq, period, clockMs?, teamId, playerId?, type, made?, points?, x?, y?, foulType?, parentEventId?}

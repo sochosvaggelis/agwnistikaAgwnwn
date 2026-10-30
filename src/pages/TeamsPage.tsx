@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useI18n } from '../i18n'
 import { addTeam } from '../db/repo'
 import { usePlayers, useTeams } from '../hooks'
+import { TeamName } from '../components/TeamSwatch'
 
 export function TeamsPage() {
   const { t } = useI18n()
@@ -31,7 +32,7 @@ export function TeamsPage() {
         <h2>{t('teams.myTeam')}</h2>
         {mine ? (
           <Link className="list-row" to={`/teams/${mine.id}`}>
-            <b className="grow">{mine.name}</b>
+            <b className="grow"><TeamName team={mine} /></b>
             <span className="muted">{t('teams.playersCount', { n: count(mine.id!) })}</span>
             <span>›</span>
           </Link>
@@ -56,7 +57,7 @@ export function TeamsPage() {
           {opponents.map(o => (
             <li key={o.id}>
               <Link className="list-row" to={`/teams/${o.id}`}>
-                <span className="grow">{o.name}</span>
+                <span className="grow"><TeamName team={o} /></span>
                 <span className="muted">{t('teams.playersCount', { n: count(o.id!) })}</span>
                 <span>›</span>
               </Link>

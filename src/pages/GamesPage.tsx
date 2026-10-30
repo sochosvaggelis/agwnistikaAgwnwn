@@ -8,6 +8,7 @@ import { fmtDate } from '../format'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ResultBadge } from '../components/ResultBadge'
+import { TeamName } from '../components/TeamSwatch'
 
 export function GamesPage() {
   const { t, lang } = useI18n()
@@ -18,7 +19,7 @@ export function GamesPage() {
   const myTeam = useMyTeam()
   const comps = useById(filter.competitions)
 
-  const name = (id: number) => teams.get(id)?.name ?? '?'
+  const name = (id: number) => teams.has(id) ? <TeamName team={teams.get(id)} /> : '?'
 
   return (
     <>
