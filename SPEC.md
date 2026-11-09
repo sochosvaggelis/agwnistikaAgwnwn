@@ -22,10 +22,10 @@ Offline basketball statistics app for an Android tablet. One operator records fu
 | Extras | Coach/bench technicals, FIBA PIR (exact, via prompts) |
 | Not tracked | Timeouts, team rebounds/turnovers, possession arrow |
 | Organization | Season → Competition → Game; a season has at most one competition of each kind: League, Cup, Friendlies, Other (new seasons start with the first three; names are editable and unique per season) |
-| Role | Coach/staff of one team ("my team"), opponents secondary |
+| Role | Coach/staff of one team ("my team"), opponents secondary. Several teams of mine are possible (added 2026-11-09): they can be in unrelated leagues, so each lives in its own IndexedDB database (`statistika` for the first, `statistika-<time>` for the others) with its own seasons, opponents, games, settings and backups, and nothing is shared. Settings → "My teams" lists them (games, last backup), adds one, opens another (the app reloads on the games list) or deletes one that isn't open. With more than one, the header shows the open team's name |
 | Views | Game box score + play-by-play, player profile, team season stats (shot chart with a 2PT/3PT filter and a zone heatmap: 11 court zones, each with made/attempts and FG%, colored hot/cold against 1 point per shot; below it the same chart for each quarter, each with its own filter and heatmap, and one for all overtimes once there are any, added 2026-10-30), head-to-head vs opponent. The game's play-by-play can be narrowed to one player of each team (added 2026-10-30) |
 | Export | PDF box score, via a print stylesheet and Android's "Save as PDF" (handles Greek text with no embedded font). Besides the whole game's shot chart, the game report (on screen and in the PDF) has a small court per period for each team with that period's made/missed shots and its FG, 2PT and 3PT made/attempts; each overtime gets its own court (added 2026-10-23) |
-| Backup | Export/import full DB as .json, plus a reminder when the last backup is older than N days |
+| Backup | Export/import the open team's DB as .json (the file name has the team's name), plus a reminder when the last backup is older than N days. Restoring a backup of a different team of mine asks first |
 | Language | Greek + English, switchable |
 
 ## Input flow

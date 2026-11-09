@@ -2,17 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../i18n'
 import { clearAllData, exportBackup, parseBackup, restoreBackup, setSetting } from '../db/repo'
 import { requestPersistentStorage } from '../db/db'
-import { DEFAULT_REMINDER_DAYS, SETTING_LAST_BACKUP, SETTING_REMINDER_DAYS, useSetting } from '../hooks'
+import { createProfile, deleteProfile, listProfiles, switchProfile, type Profile } from '../db/profiles'
+import type { Team } from '../db/types'
+import { TeamName } from '../components/TeamSwatch'
+import { DEFAULT_REMINDER_DAYS, SETTING_LAST_BACKUP, SETTING_REMINDER_DAYS, useMyTeam, useSetting } from '../hooks'
 import { fmtDateTime, todayISO } from '../format'
 import { useAppUpdate } from '../pwa'
 
-async function backupFile(): Promise<File> {
+/** The team's name in the file name tells apart the backups of each team of mine */
+async function backupFile(teamName?: string): Promise<File> {
   const backup = await exportBackup()
-  return new File([JSON.stringify(backup)], `statistika-backup-${todayISO()}.json`, { type: 'application/json' })
+  const team = teamName ? `-${teamName.trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '-')}` : ''
+  return new File([JSON.stringify(backup)], `statistika-backup${team}-${todayISO()}.json`, { type: 'application/json' })
 }
 
 export function SettingsPage() {
   const { t, lang, setLang } = useI18n()
+  const myTeam = useMyTeam()
   const last = useSetting<number>(SETTING_LAST_BACKUP)
   const reminderDays = useSetting<number>(SETTING_REMINDER_DAYS) ?? DEFAULT_REMINDER_DAYS
   const [persisted, setPersisted] = useState<boolean | null>(null)
@@ -29,7 +35,7 @@ export function SettingsPage() {
     && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })
 
   const download = async () => {
-    const file = await backupFile()
+    const file = await backupFile(myTeam?.name)
     const url = URL.createObjectURL(file)
     const a = document.createElement('a')
     a.href = url
@@ -42,7 +48,7 @@ export function SettingsPage() {
   }
 
   const share = async () => {
-    const file = await backupFile()
+    const file = await backupFile(myTeam?.name)
     try {
       await navigator.share({ files: [file], title: file.name })
       await setSetting(SETTING_LAST_BACKUP, Date.now())
@@ -55,6 +61,9 @@ export function SettingsPage() {
     setMsg('')
     try {
       const backup = parseBackup(await file.text())
+      const backupTeam = (backup.data.teams as Team[]).find(tm => tm.isMine)?.name
+      if (myTeam && backupTeam && backupTeam !== myTeam.name
+        && !confirm(t('settings.otherTeamBackup', { backup: backupTeam, current: myTeam.name }))) return
       if (!confirm(t('settings.confirmRestore', { date: fmtDateTime(Date.parse(backup.exportedAt), lang) }))) return
       await restoreBackup(backup)
       await setSetting(SETTING_LAST_BACKUP, Date.now())
@@ -76,7 +85,7 @@ export function SettingsPage() {
   }
 
   const erase = async () => {
-    if (!confirm(t('settings.confirmErase'))) return
+    if (!confirm(t('settings.confirmErase', { team: myTeam?.name ?? '—' }))) return
     if (!confirm(t('common.areYouSure'))) return
     await clearAllData()
     setMsg(t('settings.erased'))
@@ -85,6 +94,8 @@ export function SettingsPage() {
   return (
     <>
       <h1>{t('settings.title')}</h1>
+
+      <MyTeams />
 
       <div className="card">
         <h2>{t('settings.language')}</h2>
@@ -154,6 +165,62 @@ export function SettingsPage() {
         <h2>{t('settings.danger')}</h2>
         <button className="btn btn-danger" onClick={erase}>{t('settings.eraseAll')}</button>
       </div>
+
     </>
   )
 }
+
+function MyTeams() {
+  const { t, lang } = useI18n()
+  const [profiles, setProfiles] = useState<Profile[]>()
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const reload = () => listProfiles().then(setProfiles).catch(() => setProfiles([]))
+  useEffect(() => { reload() }, [])
+
+  const add = async () => {
+    if (!name.trim()) return
+    setBusy(true)
+    await createProfile(name)
+  }
+
+  const remove = async (p: Profile) => {
+    const team = p.team?.name ?? t('profiles.noTeam')
+    if (!confirm(t('profiles.confirmDelete', { team }))) return
+    if (!confirm(t('common.areYouSure'))) return
+    await deleteProfile(p.dbName)
+    reload()
+  }
+
+  return (
+    <div className="card" id="my-teams">
+      <h2>{t('profiles.title')}</h2>
+      <p className="hint">{t('profiles.explain')}</p>
+      <ul className="list">
+        {profiles?.map(p => (
+          <li key={p.dbName} className="list-row">
+            <span className="grow">
+              {p.team ? <b><TeamName team={p.team} /></b> : <span className="muted">{t('profiles.noTeam')}</span>}
+              <span className="hint" style={{ display: 'block' }}>
+                {t('profiles.games', { n: p.games })} · {t('settings.lastBackup', { date: p.lastBackupAt ? fmtDateTime(p.lastBackupAt, lang) : t('settings.never') })}
+              </span>
+            </span>
+            {p.active ? (
+              <span className="badge">{t('profiles.current')}</span>
+            ) : (
+              <>
+                <button className="btn btn-sm btn-primary" onClick={() => switchProfile(p.dbName)}>{t('profiles.open')}</button>
+                <button className="btn btn-sm btn-danger" onClick={() => remove(p)}>{t('common.delete')}</button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="form-row" style={{ marginTop: 12 }}>
+        <label className="grow">{t('common.name')}<input value={name} onChange={e => setName(e.target.value)} /></label>
+        <button className="btn" disabled={!name.trim() || busy} onClick={add}>＋ {t('profiles.add')}</button>
+      </div>
+    </div>
+  )
+}
+

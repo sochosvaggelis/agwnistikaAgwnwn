@@ -1,4 +1,9 @@
-import { HashRouter, NavLink, Outlet, Route, Routes } from 'react-router'
+import { useEffect, useState } from 'react'
+import Dexie from 'dexie'
+import { HashRouter, Link, NavLink, Outlet, Route, Routes } from 'react-router'
+import { isStatsDbName } from './db/db'
+import { useMyTeam } from './hooks'
+import { TeamName } from './components/TeamSwatch'
 import { I18nProvider, useI18n } from './i18n'
 import { AppUpdateProvider, useAppUpdate } from './pwa'
 import { LiveGamePage } from './live/LiveGamePage'
@@ -47,6 +52,7 @@ function Layout() {
     <>
       <nav className="app-nav">
         <span className="brand"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />{t('app.title')}</span>
+        <OpenTeam />
         <NavLink to="/" end>{t('nav.games')}</NavLink>
         <NavLink to="/stats">{t('nav.stats')}</NavLink>
         <NavLink to="/h2h">{t('nav.h2h')}</NavLink>
@@ -59,6 +65,17 @@ function Layout() {
       </main>
     </>
   )
+}
+
+/** With more than one team of mine, which one is open; tapping it leads to switching */
+function OpenTeam() {
+  const myTeam = useMyTeam()
+  const [several, setSeveral] = useState(false)
+  useEffect(() => {
+    Dexie.getDatabaseNames().then(names => setSeveral(names.filter(isStatsDbName).length > 1)).catch(() => {})
+  }, [])
+  if (!several || !myTeam) return null
+  return <Link className="open-team" to="/settings"><TeamName team={myTeam} /></Link>
 }
 
 function UpdatePrompt() {

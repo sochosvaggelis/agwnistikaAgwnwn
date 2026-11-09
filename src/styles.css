@@ -197,6 +197,16 @@ label.inline { flex-direction: row; align-items: center; gap: 10px; color: var(-
   white-space: nowrap;
 }
 .app-nav .brand img { width: 32px; height: 32px; display: block; }
+.app-nav a.open-team {
+  margin-right: 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.95);
+  color: var(--brand);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.app-nav a.open-team:hover { background: #fff; color: var(--brand); }
 .app-nav a {
   padding: 9px 14px;
   border-radius: 999px;
