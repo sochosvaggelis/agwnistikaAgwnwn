@@ -49,6 +49,7 @@ export const SETTING_REMINDER_DAYS = 'backupReminderDays'
 export const DEFAULT_REMINDER_DAYS = 7
 /** The parts of the game report the last PDF had */
 export const SETTING_PRINT_PARTS = 'printParts'
+export const SETTING_STATS_PRINT_PARTS = 'statsPrintParts'
 
 export function useById<T extends { id?: number }>(items: T[] | undefined): Map<number, T> {
   return useMemo(() => new Map((items ?? []).map(i => [i.id!, i])), [items])

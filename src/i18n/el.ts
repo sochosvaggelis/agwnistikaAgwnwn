@@ -271,6 +271,7 @@ export const el: Record<TKey, string> = {
   'stats.leaders': 'Κορυφαίοι',
   'stats.teamAverages': 'Ομάδα ανά αγώνα',
   'stats.opponentAverages': 'Αντίπαλοι ανά αγώνα',
+  'stats.teamVsOpponents': 'Ομάδα και αντίπαλοι ανά αγώνα',
   'stats.needMyTeam': 'Ορίστε ποια ομάδα είναι η δική σας για να δείτε στατιστικά.',
 
   'player.gameLog': 'Αγώνες',

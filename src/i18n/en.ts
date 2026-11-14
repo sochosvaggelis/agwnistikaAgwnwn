@@ -269,6 +269,7 @@ export const en = {
   'stats.leaders': 'Leaders',
   'stats.teamAverages': 'Team per game',
   'stats.opponentAverages': 'Opponents per game',
+  'stats.teamVsOpponents': 'Team and opponents per game',
   'stats.needMyTeam': 'Mark a team as yours to see team stats.',
 
   'player.gameLog': 'Game log',

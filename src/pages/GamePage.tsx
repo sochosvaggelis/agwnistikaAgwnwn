@@ -13,6 +13,7 @@ import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
 import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
+import { PrintDialog } from '../components/PrintDialog'
 import { describeEvent } from '../live/describe'
 import { fmtDate, fmtPct } from '../format'
 import { TeamName } from '../components/TeamSwatch'
@@ -233,7 +234,7 @@ export function GamePage() {
         />
       )}
       {choosingPrint && (
-        <PrintDialog
+        <GamePrintDialog
           initial={savedParts ? PRINT_PARTS.filter(p => savedParts.includes(p)) : [...PRINT_PARTS]}
           teamName={teamName}
           onPrint={print}
@@ -272,39 +273,24 @@ function PeriodShots({ events, periods, side }: { events: GameEvent[]; periods: 
 }
 
 /** Choose which parts of the report, and which teams, go into the PDF */
-function PrintDialog({ initial, teamName, onPrint, onClose }: {
+function GamePrintDialog({ initial, teamName, onPrint, onClose }: {
   initial: PrintPart[]
   teamName: (side: Side) => ReactNode
   onPrint: (choice: PrintChoice) => void
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const [parts, setParts] = useState(initial)
   const [sides, setSides] = useState(SIDES)
-  const toggle = (part: PrintPart) => setParts(PRINT_PARTS.filter(p => (p === part) !== parts.includes(p)))
   const sideChoices: Side[][] = [SIDES, ['home'], ['away']]
 
   return (
-    <Modal
-      title={t('game.printTitle')}
+    <PrintDialog
+      parts={PRINT_PARTS}
+      label={part => t(PRINT_PART_LABEL[part])}
+      initial={initial}
+      onPrint={parts => onPrint({ parts, sides })}
       onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>{t('common.cancel')}</button>
-          <button className="btn btn-primary" disabled={parts.length === 0} onClick={() => onPrint({ parts, sides })}>
-            ⎙ {t('game.print')}
-          </button>
-        </>
-      }
     >
-      <div className="print-choices">
-        {PRINT_PARTS.map(part => (
-          <label key={part} className="inline">
-            <input type="checkbox" checked={parts.includes(part)} onChange={() => toggle(part)} />
-            {t(PRINT_PART_LABEL[part])}
-          </label>
-        ))}
-      </div>
       <h3>{t('game.printTeams')}</h3>
       <div className="print-choices">
         {sideChoices.map(choice => (
@@ -314,7 +300,7 @@ function PrintDialog({ initial, teamName, onPrint, onClose }: {
           </label>
         ))}
       </div>
-    </Modal>
+    </PrintDialog>
   )
 }
 

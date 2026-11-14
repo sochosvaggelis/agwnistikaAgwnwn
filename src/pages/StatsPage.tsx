@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router'
 import { useI18n, type TKey } from '../i18n'
-import { mySideOf, useById, useGamesData, useMyTeam, usePlayers, useTeams } from '../hooks'
+import { mySideOf, SETTING_STATS_PRINT_PARTS, useById, useGamesData, useMyTeam, usePlayers, useSetting, useTeams } from '../hooks'
+import { setSetting } from '../db/repo'
+import { PrintDialog } from '../components/PrintDialog'
 import { SeasonFilter, useSeasonFilter } from '../components/SeasonFilter'
 import { StatTable } from '../components/StatTable'
 import { ShotChart } from '../components/ShotChart'
@@ -17,6 +20,18 @@ import type { Player } from '../db/types'
 /** Stands for all the overtimes together in the shots by quarter */
 const OVERTIMES = REGULATION_PERIODS + 1
 
+/** The page's sections a PDF can have, in the page's order */
+const PRINT_PARTS = ['record', 'leaders', 'team', 'players', 'shotChart', 'shotsByPeriod'] as const
+type PrintPart = (typeof PRINT_PARTS)[number]
+const PRINT_PART_LABEL: Record<PrintPart, TKey> = {
+  record: 'common.record',
+  leaders: 'stats.leaders',
+  team: 'stats.teamVsOpponents',
+  players: 'common.players',
+  shotChart: 'game.shotChart',
+  shotsByPeriod: 'game.shotsByPeriod',
+}
+
 export function StatsPage() {
   const { t, lang } = useI18n()
   const myTeam = useMyTeam()
@@ -31,6 +46,10 @@ export function StatsPage() {
   const [mode, setMode] = useState<'avg' | 'total'>('avg')
   /** The picked game, tied to the season/competition filter it was picked under */
   const [gamePick, setGamePick] = useState<{ key: string; id: number } | null>(null)
+  const savedParts = useSetting<PrintPart[]>(SETTING_STATS_PRINT_PARTS)
+  // What the last PDF had; printing from the browser menu prints the same
+  const [printParts, setPrintParts] = useState<PrintPart[]>([...PRINT_PARTS])
+  const [choosingPrint, setChoosingPrint] = useState(false)
 
   if (myTeam === undefined) return null
   if (myTeam === null) return <p className="empty">{t('stats.needMyTeam')} <Link to="/teams">{t('nav.teams')}</Link></p>
@@ -58,11 +77,23 @@ export function StatsPage() {
     : filter.competitions?.find(c => c.id === filter.value.competitionId)?.name
   const pickedGame = gameId != null ? games?.find(gd => gd.game.id === gameId) : undefined
 
+  const print = (parts: PrintPart[]) => {
+    setSetting(SETTING_STATS_PRINT_PARTS, parts)
+    // The page has to show the chosen sections, without the dialog, before the browser takes it
+    flushSync(() => {
+      setPrintParts(parts)
+      setChoosingPrint(false)
+    })
+    window.print()
+  }
+  /** Class that leaves a section out of the PDF */
+  const unprinted = (part: PrintPart) => (printParts.includes(part) ? '' : ' no-print')
+
   return (
     <>
       <div className="page-head">
         <h1>{t('stats.title')} — <TeamName team={myTeam} /></h1>
-        <button className="btn no-print" onClick={() => window.print()} disabled={!team?.gp}>⎙ {t('game.print')}</button>
+        <button className="btn no-print" onClick={() => setChoosingPrint(true)} disabled={!team?.gp}>⎙ {t('game.print')}</button>
       </div>
       <p className="print-only print-filters">
         {t('common.season')}: <b>{seasonName}</b> · {t('common.competition')}: <b>{compName}</b> · {t('common.game')}:{' '}
@@ -87,8 +118,8 @@ export function StatsPage() {
       {team && team.gp === 0 && <p className="empty">{t('common.noData')}</p>}
       {team && team.gp > 0 && (
         <>
-          <div className="grid-2">
-            <div className="card">
+          <div className={`grid-2${printParts.includes('record') || printParts.includes('leaders') ? '' : ' no-print'}`}>
+            <div className={`card${unprinted('record')}`}>
               <h2>{t('common.record')}</h2>
               <div className="scoreline">
                 <div><div className="pts">{team.wins}–{team.losses}</div><div className="muted">{t('common.win')}–{t('common.loss')}</div></div>
@@ -96,10 +127,10 @@ export function StatsPage() {
                 <div><div className="pts">{(team.pointsAgainst / team.gp).toFixed(1)}</div><div className="muted">{t('stats.pointsAgainst')}</div></div>
               </div>
             </div>
-            <Leaders aggs={aggs} players={players} />
+            <Leaders aggs={aggs} players={players} className={unprinted('leaders')} />
           </div>
 
-          <div className="card">
+          <div className={`card${unprinted('team')}`}>
             <StatTable
               firstCol={t('common.team')}
               mode="avg"
@@ -111,7 +142,7 @@ export function StatsPage() {
             />
           </div>
 
-          <div className="card">
+          <div className={`card${unprinted('players')}`}>
             <div className="page-head">
               <h2 style={{ margin: 0 }}>
                 {t('common.players')}
@@ -136,13 +167,13 @@ export function StatsPage() {
             <p className="legend">{t('stat.legend')}</p>
           </div>
 
-          <div className="card">
+          <div className={`card${unprinted('shotChart')}`}>
             <h2>{t('game.shotChart')}</h2>
             <ShotChart shots={shots} controls />
           </div>
 
           {/* The same chart per quarter, each with its own controls; the overtimes share one */}
-          <div className="card">
+          <div className={`card${unprinted('shotsByPeriod')}`}>
             <h2>{t('game.shotsByPeriod')}</h2>
             <div className="quarter-charts">
               {[1, 2, 3, 4, ...((scoped ?? []).some(gd => gd.events.some(e => isOvertime(e.period))) ? [OVERTIMES] : [])].map(period => (
@@ -155,6 +186,16 @@ export function StatsPage() {
           </div>
         </>
       )}
+
+      {choosingPrint && (
+        <PrintDialog
+          parts={PRINT_PARTS}
+          label={part => t(PRINT_PART_LABEL[part])}
+          initial={savedParts ? PRINT_PARTS.filter(p => savedParts.includes(p)) : [...PRINT_PARTS]}
+          onPrint={print}
+          onClose={() => setChoosingPrint(false)}
+        />
+      )}
     </>
   )
 }
@@ -166,10 +207,10 @@ const LEADER_STATS: { label: TKey; get: (l: StatLine) => number }[] = [
   { label: 'stat.PIR', get: pir },
 ]
 
-function Leaders({ aggs, players }: { aggs: PlayerAgg[]; players: Map<number, Player> }) {
+function Leaders({ aggs, players, className = '' }: { aggs: PlayerAgg[]; players: Map<number, Player>; className?: string }) {
   const { t } = useI18n()
   return (
-    <div className="card">
+    <div className={`card${className}`}>
       <h2>{t('stats.leaders')}</h2>
       <table className="simple-table">
         <tbody>
