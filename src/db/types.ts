@@ -49,6 +49,8 @@ export interface Game {
   venue?: string
   /** Player ids dressed for this game, per side */
   roster: Record<Side, number[]>
+  /** Numbers worn in this game that differ from the players' own, by player id */
+  numbers?: Partial<Record<number, string>>
   status: GameStatus
   period: number
   clockEnabled: boolean

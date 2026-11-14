@@ -318,6 +318,22 @@ export const en = {
   'profiles.add': 'Add a team of mine',
   'profiles.confirmDelete': 'Delete {team} with all its seasons, opponents, games and stats? To keep a copy, open it and download a backup first.',
 
+  'game.numbers': 'Numbers in this game',
+  'game.numbersHint': 'If a player wore another number in this game, write it here. It changes this game only: the player stays one, with all their stats together.',
+  'game.ownNumber': 'usually #{n}',
+  'teams.merge': 'Merge',
+  'teams.mergeTitle': 'Merge players',
+  'teams.mergeHint': 'For one person entered twice, e.g. because they wore another number in a game. All the games and stats of the second go to the first, and the second is deleted. In the games where they wore another number, that number shows there.',
+  'teams.mergeKeep': 'Keep',
+  'teams.mergeFrom': 'Merged into it and deleted',
+  'teams.mergeBothInGame': 'Both played in the same game, so they are different players. Nothing was merged.',
+  'teams.sameNameFound': 'Same name, maybe one player entered twice:',
+  'teams.sameNameConfirm': 'Already on the team: {who}.\n\nIf this is the same player with another number in one game, don\'t add them again: change their number in that game ("Numbers in this game").\n\nAdd as a new player?',
+  'live.sameNameExists': 'A player with this name is already on the team.',
+  'live.sameWearsNumber': 'It\'s {who}: wearing #{n} in this game',
+  'live.sameJoin': 'It\'s {who}: put them in the game',
+  'live.otherPlayer': 'It\'s another player',
+
   'pwa.updateReady': 'A new version is available.',
   'pwa.reload': 'Update',
 } as const

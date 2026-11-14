@@ -5,7 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n, type TKey } from '../i18n'
 import { db } from '../db/db'
 import type { Game, GameEvent, Player, Side } from '../db/types'
-import { deleteEvent, deleteGame, getGameEvents, playerLabel, setSetting, sortPlayers, updateEvent, updateGame } from '../db/repo'
+import { deleteEvent, deleteGame, getGameEvents, playerLabel, setGameNumber, setSetting, sortPlayers, updateEvent, updateGame } from '../db/repo'
+import { asInGame } from '../db/players'
 import { SETTING_PRINT_PARTS, useSetting } from '../hooks'
 import { computeGameStats, fga, fgm, pct, shotsOf } from '../stats/compute'
 import { FOUL_TYPES, formatClock, periodLabel, REGULATION_PERIODS } from '../stats/rules'
@@ -14,6 +15,7 @@ import { ShotChart } from '../components/ShotChart'
 import { Court } from '../components/Court'
 import { Modal } from '../components/Modal'
 import { PrintDialog } from '../components/PrintDialog'
+import { GameNumbersModal } from '../components/GameNumbersModal'
 import { describeEvent } from '../live/describe'
 import { fmtDate, fmtPct } from '../format'
 import { TeamName } from '../components/TeamSwatch'
@@ -57,10 +59,14 @@ export function GamePage() {
   // What the last PDF had; printing from the browser menu prints the same
   const [printChoice, setPrintChoice] = useState<PrintChoice>({ parts: [...PRINT_PARTS], sides: SIDES })
   const [choosingPrint, setChoosingPrint] = useState(false)
+  const [editingNumbers, setEditingNumbers] = useState(false)
   // One player per team, or none, to narrow the play-by-play to
   const [pbpPlayer, setPbpPlayer] = useState<Partial<Record<Side, number>>>({})
 
-  const playerMap = useMemo(() => new Map((teamPlayers ?? []).map(p => [p.id!, p])), [teamPlayers])
+  // Each player with the number they wore in this game
+  const gamePlayers = useMemo(() => (teamPlayers ?? []).map(p => asInGame(p, { numbers: game?.numbers })), [teamPlayers, game?.numbers])
+  const playerMap = useMemo(() => new Map(gamePlayers.map(p => [p.id!, p])), [gamePlayers])
+  const ownPlayers = useMemo(() => new Map((teamPlayers ?? []).map(p => [p.id!, p])), [teamPlayers])
   const stats = useMemo(() => (game && events ? computeGameStats(events, game) : null), [game, events])
   const colorVars = useMemo(() => teamColorVars(teams?.[0], teams?.[1]), [teams])
 
@@ -107,6 +113,7 @@ export function GamePage() {
           ? <Link className="btn btn-primary" to={`/games/${gameId}/live`}>▶ {t('game.continue')}</Link>
           : <button className="btn" onClick={reopen}>✎ {t('game.reopen')}</button>}
         <button className="btn" onClick={() => setChoosingPrint(true)}>⎙ {t('game.print')}</button>
+        <button className="btn" onClick={() => setEditingNumbers(true)}># {t('game.numbers')}</button>
         <span style={{ flex: 1 }} />
         <button className="btn btn-danger" onClick={remove}>{t('game.delete')}</button>
       </div>
@@ -228,9 +235,19 @@ export function GamePage() {
         <EditEventModal
           ev={editing}
           periods={periods}
-          players={sidePlayersAll(teamPlayers ?? [], editing.side === 'home' ? game.homeTeamId : game.awayTeamId)}
-          opponents={sidePlayersAll(teamPlayers ?? [], editing.side === 'home' ? game.awayTeamId : game.homeTeamId)}
+          players={sidePlayersAll(gamePlayers, editing.side === 'home' ? game.homeTeamId : game.awayTeamId)}
+          opponents={sidePlayersAll(gamePlayers, editing.side === 'home' ? game.awayTeamId : game.homeTeamId)}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {editingNumbers && (
+        <GameNumbersModal
+          game={game}
+          sides={SIDES}
+          teams={teams ?? []}
+          players={ownPlayers}
+          onSave={(player, number) => setGameNumber(gameId, player, number)}
+          onClose={() => setEditingNumbers(false)}
         />
       )}
       {choosingPrint && (

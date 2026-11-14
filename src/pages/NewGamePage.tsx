@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '../i18n'
 import { db } from '../db/db'
+import { addPlayersQuickChecked } from '../addPlayers'
 import { addPlayersQuick, addSeason, addTeam, createGame, ensureCompetition, playerLabel, sortPlayers } from '../db/repo'
 import { availableKinds, COMPETITION_KINDS, DEFAULT_KINDS } from '../db/competitions'
 import type { CompetitionKind, Player, Side } from '../db/types'
@@ -278,7 +279,7 @@ function QuickAdd({ teamId }: { teamId: number }) {
         {t('teams.quickAdd')}
         <input value={text} onChange={e => setText(e.target.value)} placeholder="4 5 7 9" />
       </label>
-      <button className="btn" disabled={!text.trim()} onClick={async () => { await addPlayersQuick(teamId, text); setText('') }}>
+      <button className="btn" disabled={!text.trim()} onClick={async () => { if (await addPlayersQuickChecked(teamId, text, t)) setText('') }}>
         {t('common.add')}
       </button>
     </div>

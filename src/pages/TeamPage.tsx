@@ -4,7 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '../i18n'
 import { db } from '../db/db'
 import type { Player, Team } from '../db/types'
-import { addPlayer, addPlayersQuick, deleteTeam, setMyTeam, setTeamColors, sortPlayers } from '../db/repo'
+import { deleteTeam, mergePlayers, playerLabel, setMyTeam, setTeamColors, sortPlayers } from '../db/repo'
+import { playersNamed, sameNameGroups } from '../db/players'
+import { addPlayerChecked, addPlayersQuickChecked } from '../addPlayers'
+import { Modal } from '../components/Modal'
 import { PRESET_COLORS, teamColors, teamColorVars } from '../teamColors'
 import { TeamName, TeamSwatch } from '../components/TeamSwatch'
 
@@ -18,6 +21,8 @@ export function TeamPage() {
   const [quick, setQuick] = useState('')
   const [num, setNum] = useState('')
   const [name, setName] = useState('')
+  /** The two players being merged, `from` into `into` */
+  const [merging, setMerging] = useState<{ from: number; into?: number } | null>(null)
 
   if (team === undefined || players === undefined) return null
   if (!team) return <p>{t('common.noData')}</p>
@@ -37,7 +42,7 @@ export function TeamPage() {
   }
   const add = async () => {
     if (!num.trim() && !name.trim()) return
-    await addPlayer({ teamId, number: num, name })
+    if ((await addPlayerChecked(teamId, num, name, t)) == null) return
     setNum('')
     setName('')
   }
@@ -56,6 +61,16 @@ export function TeamPage() {
 
       <div className="card">
         <h2>{t('teams.roster')}</h2>
+        {/* One person entered twice, the later one most likely the duplicate */}
+        {sameNameGroups(players).map(group => {
+          const [first, ...rest] = [...group].sort((a, b) => a.createdAt - b.createdAt)
+          return (
+            <div key={first.id} className="banner same-name">
+              <span>{t('teams.sameNameFound')} <b>{group.map(playerLabel).join(', ')}</b></span>
+              <button className="btn btn-sm" onClick={() => setMerging({ from: rest[rest.length - 1].id!, into: first.id })}>{t('teams.merge')}</button>
+            </div>
+          )
+        })}
         <table className="simple-table">
           <thead>
             <tr>
@@ -63,11 +78,11 @@ export function TeamPage() {
               <th>{t('common.name')}</th>
               <th style={{ width: 110 }}>{t('common.position')}</th>
               <th style={{ width: 80 }}>{t('common.active')}</th>
-              <th style={{ width: 60 }} />
+              <th style={{ width: 100 }} />
             </tr>
           </thead>
           <tbody>
-            {players.map(p => <PlayerRow key={p.id} player={p} />)}
+            {players.map(p => <PlayerRow key={p.id} player={p} canMerge={players.length > 1} onMerge={() => setMerging({ from: p.id! })} />)}
             <tr>
               <td><input inputMode="numeric" value={num} onChange={e => setNum(e.target.value)} placeholder="#" /></td>
               <td><input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} /></td>
@@ -84,12 +99,54 @@ export function TeamPage() {
         <p className="hint">{t('teams.quickAddHint')}</p>
         <div className="form-row">
           <label className="grow"><textarea value={quick} onChange={e => setQuick(e.target.value)} /></label>
-          <button className="btn" disabled={!quick.trim()} onClick={async () => { await addPlayersQuick(teamId, quick); setQuick('') }}>
+          <button className="btn" disabled={!quick.trim()} onClick={async () => { if (await addPlayersQuickChecked(teamId, quick, t)) setQuick('') }}>
             {t('common.add')}
           </button>
         </div>
       </div>
+      {merging && <MergeModal players={players} initial={merging} onClose={() => setMerging(null)} />}
     </>
+  )
+}
+
+/** Make two players of the team one, as one person was entered twice */
+function MergeModal({ players, initial, onClose }: { players: Player[]; initial: { from: number; into?: number }; onClose: () => void }) {
+  const { t } = useI18n()
+  const from0 = players.find(p => p.id === initial.from)
+  // Without a choice yet, someone with the same name, else the first other player
+  const into0 = initial.into ?? (from0 && playersNamed(players, from0.name).find(p => p.id !== from0.id)?.id) ?? players.find(p => p.id !== initial.from)?.id
+  const [from, setFrom] = useState(initial.from)
+  const [into, setInto] = useState(into0 ?? initial.from)
+  const merge = async () => {
+    try {
+      await mergePlayers(from, into)
+      onClose()
+    } catch (e) {
+      alert(e instanceof Error && e.message === 'both-in-game' ? t('teams.mergeBothInGame') : String(e))
+    }
+  }
+  const select = (value: number, onChange: (id: number) => void) => (
+    <select value={value} onChange={e => onChange(Number(e.target.value))}>
+      {players.map(p => <option key={p.id} value={p.id}>{playerLabel(p)}</option>)}
+    </select>
+  )
+  return (
+    <Modal
+      title={t('teams.mergeTitle')}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="btn btn-primary" disabled={from === into} onClick={merge}>{t('teams.merge')}</button>
+        </>
+      }
+    >
+      <p className="hint">{t('teams.mergeHint')}</p>
+      <div className="form-row">
+        <label className="grow">{t('teams.mergeKeep')}{select(into, setInto)}</label>
+        <label className="grow">{t('teams.mergeFrom')}{select(from, setFrom)}</label>
+      </div>
+    </Modal>
   )
 }
 
@@ -168,7 +225,7 @@ function ColorPicker({ label, value, disabled, onChange }: {
 }
 
 /** Inline-editable roster row; saves on blur. */
-function PlayerRow({ player }: { player: Player }) {
+function PlayerRow({ player, canMerge, onMerge }: { player: Player; canMerge: boolean; onMerge: () => void }) {
   const { t } = useI18n()
   const [number, setNumber] = useState(player.number)
   const [name, setName] = useState(player.name)
@@ -192,7 +249,10 @@ function PlayerRow({ player }: { player: Player }) {
       <td><input value={name} onChange={e => setName(e.target.value)} onBlur={() => save({ name: name.trim() })} /></td>
       <td><input value={position} onChange={e => setPosition(e.target.value)} onBlur={() => save({ position: position.trim() || undefined })} /></td>
       <td><input type="checkbox" checked={player.active} onChange={e => save({ active: e.target.checked })} /></td>
-      <td><button className="btn btn-ghost btn-sm" onClick={remove} aria-label={t('common.delete')}>🗑</button></td>
+      <td className="row-actions">
+        {canMerge && <button className="btn btn-ghost btn-sm" onClick={onMerge} title={t('teams.merge')} aria-label={t('teams.merge')}>⇄</button>}
+        <button className="btn btn-ghost btn-sm" onClick={remove} aria-label={t('common.delete')}>🗑</button>
+      </td>
     </tr>
   )
 }

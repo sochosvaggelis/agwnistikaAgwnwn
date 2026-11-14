@@ -2,6 +2,7 @@ import Dexie from 'dexie'
 import { db, TABLES } from './db'
 import type { Competition, Game, GameEvent, Player, Side } from './types'
 import { availableKinds, competitionKind, sameName } from './competitions'
+import { mergedGame, withGameNumber } from './players'
 import type { Draft } from '../live/flow'
 import { currentClockMs, DEFAULT_OT_MIN, DEFAULT_PERIOD_MIN, periodLengthMs } from '../stats/rules'
 import { isHexColor, MAX_TEAM_COLORS } from '../teamColors'
@@ -106,17 +107,53 @@ export async function addPlayer(p: Omit<Player, 'id' | 'createdAt' | 'active'> &
   return db.players.add({ active: true, ...p, name: p.name.trim(), number: p.number.trim(), createdAt: now() }) as Promise<number>
 }
 
-/** Quick roster entry: "4 7 Papadopoulos, 10 Nikolaou" → players. Returns created ids. */
-export async function addPlayersQuick(teamId: number, text: string): Promise<number[]> {
-  const entries = text.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean).flatMap(chunk => {
+/** Quick roster entry: "4 7 Papadopoulos, 10 Nikolaou" → number and name of each player */
+export function parseQuickPlayers(text: string): { number: string; name: string }[] {
+  return text.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean).flatMap(chunk => {
     // A chunk is either "12 Name Surname" or a run of bare numbers "4 5 7"
     if (/^\d+(\s+\d+)*$/.test(chunk)) return chunk.split(/\s+/).map(number => ({ number, name: '' }))
     const m = chunk.match(/^(\d+)\s+(.+)$/)
     return m ? [{ number: m[1], name: m[2] }] : [{ number: '', name: chunk }]
   })
+}
+
+/** Quick roster entry; returns created ids. */
+export async function addPlayersQuick(teamId: number, text: string): Promise<number[]> {
   const ids: number[] = []
-  for (const e of entries) ids.push(await addPlayer({ teamId, ...e }))
+  for (const e of parseQuickPlayers(text)) ids.push(await addPlayer({ teamId, ...e }))
   return ids
+}
+
+/** Set the number a player wears in one game; their own number, or none, clears it */
+export async function setGameNumber(gameId: number, player: Player, number: string) {
+  await db.transaction('rw', db.games, async () => {
+    const game = await db.games.get(gameId)
+    if (game) await updateGame(gameId, { numbers: withGameNumber(game, player, number) })
+  })
+}
+
+/**
+ * Make two players of a team one: everything `fromId` did, in every game, becomes `intoId`'s, and `fromId` is deleted.
+ * Throws 'both-in-game' when both played in the same game, as they are then different people.
+ */
+export async function mergePlayers(fromId: number, intoId: number) {
+  await db.transaction('rw', db.players, db.games, db.events, async () => {
+    const [from, into] = await db.players.bulkGet([fromId, intoId])
+    if (!from || !into || from.teamId !== into.teamId || fromId === intoId) throw new Error('bad-merge')
+    const games = await db.games.where('homeTeamId').equals(from.teamId).or('awayTeamId').equals(from.teamId).toArray()
+    for (const game of games) {
+      const changes = mergedGame(game, from, into)
+      if (!changes) continue
+      await db.games.update(game.id!, changes)
+      await db.events.where('gameId').equals(game.id!).modify(e => {
+        if (e.playerId === fromId) e.playerId = intoId
+        if (e.targetPlayerId === fromId) e.targetPlayerId = intoId
+      })
+    }
+    // A player known only by number takes the name the other one had; one of them still playing keeps the merged one active
+    await db.players.update(intoId, { name: into.name || from.name, active: into.active || from.active })
+    await db.players.delete(fromId)
+  })
 }
 
 export function playerLabel(p: Pick<Player, 'name' | 'number'> | undefined): string {

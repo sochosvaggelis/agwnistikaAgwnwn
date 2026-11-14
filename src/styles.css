@@ -337,6 +337,12 @@ table { border-collapse: collapse; width: 100%; }
 .stat-table a { color: inherit; font-weight: 600; }
 .simple-table th, .simple-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); }
 .simple-table th { font-size: 0.8rem; color: var(--muted); }
+.row-actions { white-space: nowrap; }
+.banner.same-name { flex-wrap: wrap; }
+.numbers-table .numbers-input { width: 90px; }
+.numbers-table input { width: 72px; }
+.same-name-choice { display: grid; gap: 8px; margin-top: 12px; }
+.same-name-choice p { margin: 0; }
 .simple-table td.num, .simple-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .legend { color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
 

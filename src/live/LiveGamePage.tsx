@@ -4,9 +4,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import type { Game, GameEvent, Player, Side, Team } from '../db/types'
 import {
-  addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, prependEvents, setPeriod,
+  addPlayer, adjustClock, appendEvents, deleteEvents, deleteGroup, getGameEvents, playerLabel, prependEvents, setGameNumber, setPeriod,
   sortPlayers, startClock, stopClock, undoLastGroup, updateGame,
 } from '../db/repo'
+import { asInGame, numberInGame, playersNamed, withGameNumber } from '../db/players'
+import { GameNumbersModal } from '../components/GameNumbersModal'
 import {
   acceptsSpot, advance, chosenPlayer, isEligible, markedSpot, type ActionKey, type Draft, type FlowContext, type Input, type Step,
 } from './flow'
@@ -65,11 +67,13 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   const players = useLiveQuery(() => db.players.bulkGet(rosterIds), [rosterIds])
   const teams = useLiveQuery(() => db.teams.bulkGet([game.homeTeamId, game.awayTeamId]), [game.homeTeamId, game.awayTeamId])
 
+  // Each player with the number they wear in this game
   const playerMap = useMemo(() => {
     const m = new Map<number, Player>()
-    for (const p of players ?? []) if (p) m.set(p.id!, p)
+    for (const p of players ?? []) if (p) m.set(p.id!, asInGame(p, { numbers: game.numbers }))
     return m
-  }, [players])
+  }, [players, game.numbers])
+  const ownPlayers = useMemo(() => new Map((players ?? []).filter((p): p is Player => !!p).map(p => [p.id!, p])), [players])
   const roster = useMemo(() => ({
     home: sortPlayers(game.roster.home.map(i => playerMap.get(i)).filter((p): p is Player => !!p)),
     away: sortPlayers(game.roster.away.map(i => playerMap.get(i)).filter((p): p is Player => !!p)),
@@ -200,7 +204,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
   useWakeLock()
 
   // ---------- modals ----------
-  type ModalState = null | 'log' | 'box' | 'clock' | { sub: Side } | { addTo: Side; thenSub?: boolean }
+  type ModalState = null | 'log' | 'box' | 'clock' | { sub: Side } | { addTo: Side; thenSub?: boolean } | { numbers: Side }
   const [opened, setModal] = useState<ModalState>(null)
   // A new game starts by picking the starting fives, until that window is saved or closed
   const [startersAsked, setStartersAsked] = useState(false)
@@ -390,6 +394,7 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
           stats={stats}
           onSave={(ins, outs, ms) => substitute(modal.sub, ins, outs, ms)}
           onAddPlayer={() => setModal({ addTo: modal.sub, thenSub: true })}
+          onNumbers={() => setModal({ numbers: modal.sub })}
           onClose={closeModal}
         />
       )}
@@ -408,6 +413,30 @@ function LiveGame({ game, events }: { game: Game; events: GameEvent[] }) {
             // Back to the substitution the player was added from, where they now sit on the bench
             setModal(modal.thenSub ? { sub: side } : null)
           }}
+          onUse={(player, number) => {
+            // A player the team already has, maybe in another number for this game: still one player
+            const side = modal.addTo
+            enqueue(async () => {
+              const fresh = await db.games.get(gameId)
+              if (!fresh) return
+              const inGame = fresh.roster.home.includes(player.id!) || fresh.roster.away.includes(player.id!)
+              await updateGame(gameId, {
+                roster: inGame ? fresh.roster : { ...fresh.roster, [side]: [...fresh.roster[side], player.id!] },
+                numbers: withGameNumber(fresh, player, number || numberInGame(player, fresh)),
+              })
+            })
+            setModal(modal.thenSub ? { sub: side } : null)
+          }}
+        />
+      )}
+      {modal && typeof modal === 'object' && 'numbers' in modal && (
+        <GameNumbersModal
+          game={game}
+          sides={[modal.numbers]}
+          teams={teams ?? []}
+          players={ownPlayers}
+          onSave={(player, number) => enqueue(() => setGameNumber(gameId, player, number))}
+          onClose={() => setModal({ sub: modal.numbers })}
         />
       )}
     </div>
@@ -834,26 +863,52 @@ function ClockModal({ game, onClose, enqueue }: { game: Game; onClose: () => voi
   )
 }
 
-function AddPlayerModal({ team, onClose, onAdd }: { team?: Team; onClose: () => void; onAdd: (number: string, name: string) => void }) {
+/** A new player, unless the team already has one by that name: then the same player, maybe in another number for this game */
+function AddPlayerModal({ team, onClose, onAdd, onUse }: {
+  team?: Team
+  onClose: () => void
+  onAdd: (number: string, name: string) => void
+  onUse: (player: Player, number: string) => void
+}) {
   const { t } = useI18n()
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
+  const teamPlayers = useLiveQuery(async () => (team ? db.players.where('teamId').equals(team.id!).toArray() : []), [team?.id])
+  // The team's players with the name typed, once Add finds some
+  const [same, setSame] = useState<Player[] | null>(null)
+  const add = () => {
+    const found = playersNamed(teamPlayers ?? [], name)
+    if (found.length) setSame(found)
+    else onAdd(number, name)
+  }
+  const n = number.trim()
   return (
     <Modal
       title={<>{t('teams.addPlayer')}{team && <> — <TeamName team={team} /></>}</>}
       onClose={onClose}
-      footer={<button className="btn btn-primary" disabled={!number && !name} onClick={() => onAdd(number, name)}>{t('common.add')}</button>}
+      footer={!same && <button className="btn btn-primary" disabled={!number && !name} onClick={add}>{t('common.add')}</button>}
     >
       <div className="form-row">
-        <label>{t('common.number')}<input inputMode="numeric" value={number} onChange={e => setNumber(e.target.value)} autoFocus /></label>
-        <label className="grow">{t('common.name')}<input value={name} onChange={e => setName(e.target.value)} /></label>
+        <label>{t('common.number')}<input inputMode="numeric" value={number} onChange={e => { setNumber(e.target.value); setSame(null) }} autoFocus /></label>
+        <label className="grow">{t('common.name')}<input value={name} onChange={e => { setName(e.target.value); setSame(null) }} /></label>
       </div>
+      {same && (
+        <div className="same-name-choice">
+          <p><b>{t('live.sameNameExists')}</b></p>
+          {same.map(p => (
+            <button key={p.id} className="btn btn-primary" onClick={() => onUse(p, n)}>
+              {n && n !== p.number ? t('live.sameWearsNumber', { who: playerLabel(p), n }) : t('live.sameJoin', { who: playerLabel(p) })}
+            </button>
+          ))}
+          <button className="btn" onClick={() => onAdd(number, name)}>{t('live.otherPlayer')}</button>
+        </div>
+      )}
     </Modal>
   )
 }
 
 /** Pick who goes out and who comes in, or the starting five when nobody is on the court yet. */
-function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPlayer, onClose }: {
+function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPlayer, onNumbers, onClose }: {
   game: Game
   events: GameEvent[]
   team?: Team
@@ -862,6 +917,7 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
   stats: GameStats
   onSave: (ins: number[], outs: number[], clockMs: number | undefined) => void
   onAddPlayer: () => void
+  onNumbers: () => void
   onClose: () => void
 }) {
   const { t, lang } = useI18n()
@@ -905,6 +961,7 @@ function SubModal({ game, events, team, players, lineup, stats, onSave, onAddPla
       footer={
         <>
           <button className="btn" onClick={onAddPlayer}>＋ {t('teams.addPlayer')}</button>
+          <button className="btn" onClick={onNumbers}># {t('game.numbers')}</button>
           <span className={`sub-count${count > 5 ? ' over' : ''}`}>{t('live.lineupCount', { n: count })}</span>
           <span style={{ flex: 1 }} />
           <button className="btn" onClick={onClose}>{t('common.cancel')}</button>
