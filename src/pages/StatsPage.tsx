@@ -51,11 +51,23 @@ export function StatsPage() {
     return `${fmtDate(gd.game.date, lang)} ${side === 'home' ? t('common.vs') : t('common.at')} ${teams.get(oppId)?.name ?? ''} ${score}`
   }
 
+  // On paper the filter's dropdowns are replaced by a line saying what was picked
+  const seasonName = filter.seasonId === 'all' ? t('common.all') : filter.seasons?.find(s => s.id === filter.seasonId)?.name
+  const compName = filter.value.competitionId === 'all'
+    ? t('common.allCompetitions')
+    : filter.competitions?.find(c => c.id === filter.value.competitionId)?.name
+  const pickedGame = gameId != null ? games?.find(gd => gd.game.id === gameId) : undefined
+
   return (
     <>
       <div className="page-head">
         <h1>{t('stats.title')} — <TeamName team={myTeam} /></h1>
+        <button className="btn no-print" onClick={() => window.print()} disabled={!team?.gp}>⎙ {t('game.print')}</button>
       </div>
+      <p className="print-only print-filters">
+        {t('common.season')}: <b>{seasonName}</b> · {t('common.competition')}: <b>{compName}</b> · {t('common.game')}:{' '}
+        <b>{pickedGame ? gameLabel(pickedGame) : t('stats.allGames')}</b>
+      </p>
       <SeasonFilter filter={filter}>
         <label>
           {t('common.game')}
@@ -101,8 +113,11 @@ export function StatsPage() {
 
           <div className="card">
             <div className="page-head">
-              <h2 style={{ margin: 0 }}>{t('common.players')}</h2>
-              <ModeToggle mode={mode} setMode={setMode} />
+              <h2 style={{ margin: 0 }}>
+                {t('common.players')}
+                <span className="print-only-inline muted"> — {t(mode === 'avg' ? 'common.averages' : 'common.totals')}</span>
+              </h2>
+              <span className="no-print"><ModeToggle mode={mode} setMode={setMode} /></span>
             </div>
             <StatTable
               firstCol={t('common.player')}

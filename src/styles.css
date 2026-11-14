@@ -530,10 +530,18 @@ table { border-collapse: collapse; width: 100%; }
 .colors-preview-bar { background: linear-gradient(100deg, var(--brand) 0%, var(--brand-2) 100%); color: var(--home); font-size: 1.4rem; }
 
 /* ---------- print (PDF) ---------- */
-.print-only { display: none; }
+.print-only, .print-only-inline { display: none; }
 
 @media print {
   .print-only { display: block; }
+  .print-only-inline { display: inline; }
+  /* Dropdowns and toggles mean nothing on paper; the page says in words what they were set to */
+  .filter-bar, .shot-controls { display: none !important; }
+  .print-filters { margin: 0 0 10px; }
+  /* The quarters side by side, all on one page, each heading kept with its court */
+  .quarter-charts { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 4px 12px; }
+  .quarter-charts section { break-inside: avoid; }
+  .quarter-charts h3 { margin: 0 0 4px; break-after: avoid; }
   @page { size: A4 landscape; margin: 8mm; }
   :root {
     --bg: #fff; --surface: #fff; --surface-2: #fff; --text: #000; --muted: #444; --border: #bbb; --border-strong: #666;
